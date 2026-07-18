@@ -112,11 +112,11 @@ The UI says the heuristic did not find a plan, not that no plan exists.
 
 ### Exact solver timeout/error
 
-**Detection:** configured wall-time/status/exception boundary.
+**Detection:** CBC status/exception plus a caller-side process watchdog. CBC's internal timer is not trusted as the only boundary because the bundled Windows build can remain blocked in `cbc.wait()`.
 
-**Behavior:** discard any unverified optimality claim. Run independent greedy allocator. Successful result is `heuristic_fallback`; failure preserves `unresolved` or proven `infeasible`. Include `solver_timeout`/`solver_error` warning.
+**Behavior:** normal exact solves run in an isolated worker. The wall watchdog is configurable from 1 to a hard maximum of 60 seconds. On timeout the parent terminates the complete Python/CBC process tree, discards any unverified incumbent, and runs the independent greedy allocator. Successful result is `heuristic_fallback`; failure preserves `unresolved` or proven `infeasible`. Include `solver_timeout`/`solver_error` warning.
 
-**Recovery:** reduce scenario/frontier grid, increase explicit timeout outside demo, or use greedy.
+**Recovery:** reduce the scenario/frontier grid, choose a lower demo timeout, or use greedy. The maximum cannot be raised above 60 seconds without a reviewed code change.
 
 ### CBC proves infeasible
 
@@ -276,7 +276,7 @@ new idempotency key).
 
 ## 9. Privacy/security posture
 
-- Repository fixtures and demo text are synthetic.
+- Persona, account, purchase, bonus-progress, and demo text fixtures are synthetic. Product names and ordinary reward terms are public reference facts sourced from official issuer pages and timestamped.
 - No banking login, card number, government ID, address, or real transaction feed is accepted.
 - Secrets live in environment variables and `.env` is ignored.
 - Provider caches omit headers/secrets.

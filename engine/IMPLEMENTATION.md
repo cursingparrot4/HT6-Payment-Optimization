@@ -11,15 +11,18 @@ Implemented and validated:
 - Shared scenario/assignment feasibility with temporal utilization and forced bonuses.
 - Exact single-purchase recommendation with stable winner/runner-up ranking.
 - Aggregate plan evaluation and greedy monthly allocation with bounded repair, relocation/swap search, structured `infeasible` versus `unresolved`, and final-state alternatives.
-- Public `optimize.py` dispatch for recommendation and greedy monthly allocation.
+- Exact PuLP/CBC allocation with all-binary reachable spend states, objective parity verification, deterministic two-pass tie-breaking, and greedy fallback.
+- Brute-force parity coverage for aggregate utilization, headroom, bonus progress/completion, locks, temporal ceilings, and indivisible infeasibility.
+- Bounded sampled strategy frontier with raw-goal dominance filtering and representative selection.
+- Reoptimized one-purchase what-if with assignment and metric deltas.
+- Public `optimize.py` dispatch for recommendation, greedy/exact monthly allocation, sampled frontier, and what-if.
 
 Pending in this module:
 
-- Exact PuLP/CBC allocator and brute-force parity matrix.
-- Sampled strategy frontier.
-- What-if operation.
+- Performance validation against the full synthetic Sarah fixture once the data module lands.
+- Any calibration changes discovered during UI/demo rehearsal.
 
-Current focused gate: `uv run python -m pytest tests/unit/engine -q` and `uv run python -m ruff check engine tests/unit/engine`.
+Current focused gate: `uv run python -m pytest tests/unit/engine tests/oracle -q` and `uv run python -m ruff check engine tests/unit/engine tests/oracle`.
 
 ## 1. Mission and boundary
 
@@ -169,6 +172,9 @@ class EngineConfig:
     greedy_repair_depth: int = 2
     local_search_max_passes: int = 20
     ilp_timeout_seconds: int = 5
+    ilp_wall_timeout_seconds: int = 60
+    ilp_max_card_states: int = 5_000
+    ilp_combined_tie_break_limit: int = 1_000_000
     frontier_two_goal_steps: int = 5
     frontier_three_goal_denominator: int = 4
     frontier_max_solves: int = 15
@@ -413,49 +419,19 @@ For an active ceiling, include only purchases through the cutoff when one exists
 
 Precompute cashback, travel value, and cashflow value for every feasible `(p,c)` pair. Multiply mapped utility by ppm weight. These are valid static coefficients.
 
-### Convex utilization
+### Aggregate utilization and headroom states
 
-For every positive-limit card with nonzero credit-health weight, create integer `util_bps[c]` and ending balance expression `B[c]`. Enforce the exact displayed floor without floating point:
+For every card with nonzero credit-health or risk weight, compute the finite set of assigned-spend totals reachable from the indivisible purchase amounts within available credit. Create one binary variable per reachable state, choose exactly one, and link the assignment spend expression to that selected state.
 
-```text
-limit[c] * util_bps[c] <= 10000 * B[c]
-10000 * B[c] <= limit[c] * util_bps[c] + (limit[c] - 1)
-```
+Precompute `incremental_utilization_penalty_points(card, state)` and `incremental_risk_penalty_points(card, state)` with the same pure Python functions used by `evaluate_plan`; add their signed integer coefficients directly to the objective. A full-horizon utilization ceiling reduces the state capacity before enumeration. Dated ceilings remain separate linear assignment constraints because post-cutoff spend can exceed the dated capacity.
 
-Create nonnegative integer bps-segment variables bounded by configured band widths whose sum is `util_bps[c]`. Nondecreasing penalty slopes and a negative objective coefficient fill cheaper segments first, exactly matching `utilization_penalty_points`. The starting penalty is a constant and may be omitted from the solve objective, then restored in the reported incremental breakdown. When credit-health weight is zero, omit these variables and compute reporting metrics from the final assignment.
-
-Test parity against the pure Python penalty at every boundary and representative card limits/balances. Hard utilization feasibility continues to use exact balance cross multiplication, not the floored `util_bps` variable.
-
-### Risk headroom
-
-Let `headroom_shortfall[c] >= desired_headroom[c] - (limit[c] - ending_balance[c])` and `>= 0`. Penalize it by the `min_risk` ppm weight. The starting shortfall is a constant omitted during solving and subtracted/restored in the reported incremental objective.
+Cap each card at `ilp_max_card_states`. Exceeding the cap is an explicit `heuristic_fallback`, never an approximation. This all-binary formulation avoids bundled CBC instability observed with large-coefficient general-integer floor variables while preserving exact Python/ILP parity.
 
 ### Signup bonus
 
-For each unmet active bonus card, let `S[c]` be deadline-eligible assigned spend, `R[c] > 0` remaining required spend, and `M[c]` the sum of all eligible purchase amounts (a valid upper bound on `S`). Create binary `hit[c]` and enforce an exact threshold indicator in integer cents:
+For each active unmet bonus, compute reachable deadline-eligible spend totals within card capacity. Choose one binary state and link it to the eligible assignment expression. Precompute the exact capped progress, floored progress-pool value, and all-or-nothing completion value for every state. A forced bonus permits only states at or above remaining required spend.
 
-```text
-S[c] >= R[c] * hit[c]
-S[c] <= (R[c] - 1) + M[c] * hit[c]
-```
-
-If the card is forced, set `hit[c] == 1`. For positive signup weight, create integer `progress[c] = min(S[c], R[c])` using:
-
-```text
-0 <= progress[c] <= R[c]
-progress[c] <= S[c]
-progress[c] >= S[c] - M[c] * hit[c]
-progress[c] >= R[c] * hit[c]
-```
-
-To exactly match `progress_pool * progress // R`, create bounded integer `progress_points[c]` and enforce:
-
-```text
-R[c] * progress_points[c] <= progress_pool[c] * progress[c]
-progress_pool[c] * progress[c] <= R[c] * progress_points[c] + (R[c] - 1)
-```
-
-Objective signup utility is `progress_points[c] + completion_pool[c] * hit[c]`, multiplied by signup ppm. If signup weight is zero, keep only `hit` for a forced bonus; otherwise omit bonus variables and compute metrics from final assignments. Omit all variables for bonuses already completed before this plan. This formulation uses no guessed urgency multiplier and no ambiguous one-way big-M indicator.
+The same state cap and honest fallback apply. This removes ambiguous one-way big-M indicators and matches `signup_bonus_factors` exactly, including non-divisible reward/threshold values.
 
 ### Deterministic tie-break
 
@@ -473,7 +449,9 @@ This guarantees the tie-break cannot change a one-unit primary preference in exa
 - `LpStatusInfeasible`: return `infeasible` with analyzer diagnostics.
 - Timeout/not solved/error: ignore any unverified CBC incumbent and call the tested greedy allocator. If it succeeds, return that plan as `heuristic_fallback` with `solver_method=greedy`; otherwise preserve `unresolved`/proven `infeasible` and include the exact-solver issue.
 
-Do not claim the best incumbent is optimal. Record solve duration in debug logs, not deterministic response payloads.
+Every normal CBC call runs inside a spawned worker process. `ilp_timeout_seconds` is passed to CBC as its internal target, while `ilp_wall_timeout_seconds` is an absolute caller-side watchdog constrained to `1..60` seconds. If CBC ignores its internal timer, hangs in `wait()`, or exits natively, the parent kills the complete worker/CBC process tree and returns the verified greedy fallback. Injected test solvers remain in-process for deterministic unit testing.
+
+Small assignment keys use one combined secondary solve. Larger keys use sequential lexicographic fixing to avoid numerically dangerous exponential objective coefficients. The process watchdog covers primary solving, tie-breaking, verification, and alternative generation. Do not claim the best incumbent is optimal. Record solve duration in debug logs, not deterministic response payloads.
 
 ## 13. Sampled strategy frontier
 
@@ -549,6 +527,7 @@ Return integer deltas `override - base` for reward value, max utilization, cashf
 - Verify utilization piecewise parity.
 - Verify bonus hit and partial progress.
 - Verify timeout fallback status through an injected/mocked solver boundary.
+- Verify the caller-side wall watchdog kills a sleeping worker and returns fallback.
 - Assert optimal utility is at least greedy utility on the same feasible scenario.
 
 ### Frontier and what-if

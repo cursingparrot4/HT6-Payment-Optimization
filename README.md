@@ -55,7 +55,7 @@ Validate the SwitchPay layer: `.venv/bin/python -m pytest tests/unit -q`
 The sections below describe the broader hackathon prototype this repo also hosts, which
 separates language understanding from financial calculation:
 
-- A deterministic engine recommends a card and allocates a synthetic month of purchases.
+- A deterministic engine recommends a card and allocates a synthetic month of purchases using timestamped public product terms.
 - A small SFT model parses natural-language goals into validated preferences and constraints.
 - A template layer explains actual solver output.
 - FastAPI and Streamlit provide the demo workflow.
@@ -75,14 +75,14 @@ No real accounts, credentials, personally identifying information, or money move
 
 | Module | Responsibility | Status |
 |---|---|---|
-| `engine` | Domain models, integer scoring, constraints, optimization, and what-if | Implemented through greedy allocation; ILP/frontier/what-if pending |
-| `data` | Validated synthetic card and purchase scenarios | Holds SwitchPay's runtime SQLite (`data/switchpay.db`, gitignored); scenario fixtures pending |
+| `engine` | Domain models, integer scoring, constraints, optimization, and what-if | Complete: greedy, exact PuLP/CBC ILP, sampled strategy frontier, what-if |
+| `data` | Official product references plus validated synthetic accounts, purchases, and probes | Implemented: sourced 8-card catalog (`data/cards.json`), loaders, Sarah scenario, eval probes; also holds SwitchPay's runtime SQLite (`data/switchpay.db`, gitignored) |
 | `intent` | LLM provider boundary, output validation, SFT data generation | Pending (guide only) |
 | `explain` | Structured templates derived from engine facts | Pending (guide only) |
 | `api` | FastAPI orchestration: SwitchPay product endpoints plus engine `/api/recommend`, `/api/allocate`, `/api/demo-scenario` | Implemented |
 | `ui` | SwitchPay web app (Next.js + TypeScript + Tailwind, in `ui/web`); the original guide planned Streamlit | Implemented |
 | `eval` | Frozen model comparisons and downstream decision metrics | Pending (guide only) |
-| `tests` | Unit, property, oracle, contract, and end-to-end verification | `tests/unit/engine` + `tests/unit/api` implemented |
+| `tests` | Unit, property, oracle, contract, and end-to-end verification | `tests/unit/engine`, `tests/unit/data`, `tests/unit/api`, `tests/oracle` implemented |
 
 ## Environment
 
@@ -96,15 +96,19 @@ py -m venv .venv
 
 ## Current implementation
 
-The deterministic engine is implemented through the greedy monthly-allocation milestone: shared contracts, fixed-point weights, scoring, feasibility, exact single-purchase recommendation, aggregate plan evaluation, bounded repair/local search, and final-state alternatives. On top of it, the SwitchPay product layer is implemented end to end: the FastAPI backend (`api/`) with card/payment CRUD, priority-aware routing (`PUT /api/payment-priorities`, `build_priority_plan`), switch recommendations, the payment state machine with idempotency and failover, and versioned engine endpoints (`/api/recommend`, `/api/allocate`, `/api/demo-scenario`); and the Next.js UI (`ui/web`).
+The deterministic engine module is complete: shared contracts, fixed-point weights, scoring, feasibility, exact single-purchase recommendation, greedy repair/local search, exact all-binary PuLP/CBC allocation with brute-force parity checks, sampled strategy frontier, reoptimized what-if, and final-state alternatives. The sourced eight-product catalog, synthetic Sarah scenario, and five eval probes are also implemented in `data/`.
 
-Still pending from the original plan: exact ILP, sampled strategy frontier, what-if, committed scenario fixture files, the intent parser (`intent/`), the templated explanation layer (`explain/`) as a separate module, and model evaluation (`eval/`). SwitchPay's recommendation explanations are currently templated inside `api/recommender.py`.
+Normal CBC requests run in an isolated process with a configurable hard wall limit of at most 60 seconds. A timeout or native solver failure returns a verified, explicitly labeled heuristic fallback instead of hanging the caller.
+
+On top of the engine, the SwitchPay product layer is implemented end to end: the FastAPI backend (`api/`) with card/payment CRUD, priority-aware routing (`PUT /api/payment-priorities`, `build_priority_plan`), switch recommendations, the payment state machine with idempotency and failover, and versioned engine endpoints (`/api/recommend`, `/api/allocate`, `/api/demo-scenario`); and the Next.js UI (`ui/web`).
+
+Still pending from the original plan: the intent parser (`intent/`), the templated explanation layer (`explain/`) as a separate module, and model evaluation (`eval/`). SwitchPay's recommendation explanations are currently templated inside `api/recommender.py`.
 
 Validate everything implemented:
 
 ```bash
-.venv/bin/python -m pytest tests/unit -q          # 125 tests: engine + SwitchPay layer
-.venv/bin/python -m ruff check api engine tests/unit
+.venv/bin/python -m pytest tests/unit tests/oracle -q   # engine + data + SwitchPay layers
+.venv/bin/python -m ruff check api engine data tests/unit tests/oracle
 ```
 
 On Windows with uv: `uv sync --extra dev`, then `uv run python -m pytest tests/unit -q` (the generated `pytest.exe` launcher may be denied in some environments; `uv run python -m pytest` is the verified invocation).
