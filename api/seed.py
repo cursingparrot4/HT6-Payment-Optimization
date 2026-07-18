@@ -1,4 +1,11 @@
-"""Synthetic demo scenario for SwitchPay. All people, cards, and values are fake."""
+"""Demo seed built from the committed data fixtures.
+
+Wallet cards come from the Sarah scenario (``data/scenarios/sarah_august_2026.json``),
+whose cards are validated against the sourced product catalog in ``data/cards.json``.
+Public product terms are real; every account value (limits, balances, bonus progress,
+payments) is synthetic. Recurring purchases in the scenario become SwitchPay's
+recurring payments, ordered by priority.
+"""
 
 from __future__ import annotations
 
@@ -6,67 +13,46 @@ import sqlite3
 from datetime import date, timedelta
 
 from api.db import fake_token, log_event, new_id, now_iso
+from data.loaders import load_scenario
+
+SCENARIO_ID = "sarah-august-2026"
+
+# Deliberately suboptimal initial funding so the demo opens with real switch
+# recommendations (e.g. rent should move to the Amex Gold card to complete its
+# $500 welcome bonus).
+INITIAL_FUNDING = {
+    "rent-aug": "scotia-momentum-visa-infinite",
+    "insurance": "scotia-momentum-visa-infinite",
+    "utilities": "rbc-avion-visa-infinite",
+    "internet": "rbc-avion-visa-infinite",
+    "transit-pass": "scotia-momentum-visa-infinite",
+    "streaming": "scotia-momentum-visa-infinite",
+}
+
+PAYMENT_NAMES = {
+    "rent-aug": "Rent",
+    "insurance": "Insurance",
+    "utilities": "Utilities",
+    "internet": "Internet",
+    "transit-pass": "Transit Pass",
+    "streaming": "Streaming",
+}
 
 
 def seed_demo(conn: sqlite3.Connection, today: date) -> dict[str, list[str]]:
-    """Reset the database to the canonical Card A/B/C rent scenario."""
+    """Reset the database to the catalog-backed Sarah scenario."""
+
+    scenario = load_scenario(SCENARIO_ID)
+    scenario = scenario.scenario if hasattr(scenario, "scenario") else scenario
 
     conn.execute("DELETE FROM events")
     conn.execute("DELETE FROM transactions")
     conn.execute("DELETE FROM payments")
     conn.execute("DELETE FROM cards")
 
-    cards = [
-        {
-            "id": "card_aeroplan",
-            "name": "Aeroplan Voyager (synthetic)",
-            "reward_type": "points",
-            "reward_rate_bps": 100,  # 1 point per dollar
-            "point_value_millicents": 1_000,  # 1 point = 1 cent
-            "credit_limit_cents": 600_000,
-            "current_balance_cents": 200_000,
-            "bonus_target_cents": 300_000,
-            "bonus_progress_cents": 120_000,  # $1,800 remaining
-            "bonus_value_cents": 60_000,  # 60,000 points at 1c/pt = $600
-            "bonus_deadline": (today + timedelta(days=12)).isoformat(),
-            "expiry_date": (today + timedelta(days=900)).isoformat(),
-            "status": "active",
-            "ineligible_categories": "",
-        },
-        {
-            "id": "card_cascade",
-            "name": "Cascade Cashback (synthetic)",
-            "reward_type": "cashback",
-            "reward_rate_bps": 200,  # 2% cashback
-            "point_value_millicents": 1_000,
-            "credit_limit_cents": 1_000_000,
-            "current_balance_cents": 50_000,
-            "bonus_target_cents": None,
-            "bonus_progress_cents": None,
-            "bonus_value_cents": None,
-            "bonus_deadline": None,
-            "expiry_date": (today + timedelta(days=700)).isoformat(),
-            "status": "active",
-            "ineligible_categories": "",
-        },
-        {
-            "id": "card_maple",
-            "name": "Maple Lite Cashback (synthetic)",
-            "reward_type": "cashback",
-            "reward_rate_bps": 150,  # 1.5% cashback
-            "point_value_millicents": 1_000,
-            "credit_limit_cents": 600_000,
-            "current_balance_cents": 120_000,
-            "bonus_target_cents": None,
-            "bonus_progress_cents": None,
-            "bonus_value_cents": None,
-            "bonus_deadline": None,
-            "expiry_date": (today + timedelta(days=400)).isoformat(),
-            "status": "active",
-            "ineligible_categories": "",
-        },
-    ]
-    for card in cards:
+    card_ids: list[str] = []
+    for index, card in enumerate(scenario.cards):
+        bonus = card.signup_bonus
         conn.execute(
             "INSERT INTO cards (id, name, token, reward_type, reward_rate_bps,"
             " point_value_millicents, credit_limit_cents, current_balance_cents,"
@@ -74,87 +60,57 @@ def seed_demo(conn: sqlite3.Connection, today: date) -> dict[str, list[str]]:
             " expiry_date, status, ineligible_categories, recent_failures, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)",
             (
-                card["id"],
-                card["name"],
+                card.id,
+                card.name,
                 fake_token(),
-                card["reward_type"],
-                card["reward_rate_bps"],
-                card["point_value_millicents"],
-                card["credit_limit_cents"],
-                card["current_balance_cents"],
-                card["bonus_target_cents"],
-                card["bonus_progress_cents"],
-                card["bonus_value_cents"],
-                card["bonus_deadline"],
-                card["expiry_date"],
-                card["status"],
-                card["ineligible_categories"],
+                "cashback" if card.base_reward_type.value == "cashback" else "points",
+                card.base_rate_bps,
+                card.point_value_millicents,
+                card.credit_limit_cents,
+                card.current_balance_cents,
+                bonus.spend_required_cents if bonus else None,
+                bonus.spend_so_far_cents if bonus else None,
+                bonus.reward_value_cents if bonus else None,
+                bonus.deadline_date.isoformat() if bonus else None,
+                # Expiry is synthetic account state; stagger it well past the demo.
+                (today + timedelta(days=540 + 180 * index)).isoformat(),
+                "active",
+                "",
                 now_iso(),
             ),
         )
+        card_ids.append(card.id)
 
-    payments = [
-        {
-            "id": new_id("pay"),
-            "name": "Rent",
-            "category": "rent",
-            "amount_cents": 240_000,
-            "due_date": (today + timedelta(days=5)).isoformat(),
-            "frequency": "monthly",
-            "processing_fee_bps": 0,
-            "funding_card_id": "card_cascade",
-            "priority_rank": 0,
-        },
-        {
-            "id": new_id("pay"),
-            "name": "Car Insurance",
-            "category": "insurance",
-            "amount_cents": 32_000,
-            "due_date": (today + timedelta(days=9)).isoformat(),
-            "frequency": "monthly",
-            "processing_fee_bps": 100,
-            "funding_card_id": "card_maple",
-            "priority_rank": 1,
-        },
-        {
-            "id": new_id("pay"),
-            "name": "Hydro & Utilities",
-            "category": "utilities",
-            "amount_cents": 18_500,
-            "due_date": (today + timedelta(days=14)).isoformat(),
-            "frequency": "monthly",
-            "processing_fee_bps": 0,
-            "funding_card_id": "card_cascade",
-            "priority_rank": 2,
-        },
-    ]
-    for payment in payments:
+    recurring = [p for p in scenario.purchases if p.is_recurring]
+    recurring.sort(key=lambda p: -p.amount_cents)  # priority: biggest bills first
+    payment_ids: list[str] = []
+    for rank, purchase in enumerate(recurring):
+        payment_id = new_id("pay")
         conn.execute(
             "INSERT INTO payments (id, name, category, amount_cents, due_date, frequency,"
             " processing_fee_bps, funding_card_id, priority_rank, created_at)"
             " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
-                payment["id"],
-                payment["name"],
-                payment["category"],
-                payment["amount_cents"],
-                payment["due_date"],
-                payment["frequency"],
-                payment["processing_fee_bps"],
-                payment["funding_card_id"],
-                payment["priority_rank"],
+                payment_id,
+                PAYMENT_NAMES.get(purchase.id, purchase.id.replace("-", " ").title()),
+                purchase.category,
+                purchase.amount_cents,
+                purchase.date.isoformat(),
+                "monthly",
+                100 if purchase.id == "rent-aug" else 0,  # card-rent processors charge a fee
+                INITIAL_FUNDING.get(purchase.id, card_ids[0]),
+                rank,
                 now_iso(),
             ),
         )
+        payment_ids.append(payment_id)
 
     log_event(
         conn,
         "seed",
-        "Demo scenario loaded: 3 synthetic cards and 3 recurring payments. No real "
-        "accounts, credentials, or money are involved.",
+        f"Demo loaded from scenario {SCENARIO_ID}: {len(card_ids)} catalog-backed cards "
+        f"and {len(payment_ids)} recurring payments. Product terms are public issuer "
+        "data; all balances, limits, and payments are synthetic.",
     )
     conn.commit()
-    return {
-        "cards": [c["id"] for c in cards],
-        "payments": [p["id"] for p in payments],
-    }
+    return {"cards": card_ids, "payments": payment_ids}

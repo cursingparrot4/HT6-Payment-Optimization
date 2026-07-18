@@ -5,7 +5,17 @@ import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Card, Payment, api, money } from "@/lib/api";
 import { Badge, EmptyState, Modal, PageHeader } from "@/components/ui";
 
-const CATEGORIES = ["rent", "tuition", "utilities", "insurance", "taxes", "other"];
+const CATEGORIES = [
+  "rent",
+  "recurring",
+  "utilities",
+  "insurance",
+  "transit",
+  "streaming",
+  "tuition",
+  "taxes",
+  "other",
+];
 
 interface PaymentFormState {
   name: string;

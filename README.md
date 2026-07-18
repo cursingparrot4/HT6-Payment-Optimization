@@ -23,13 +23,15 @@ npm install
 npm run dev   # http://localhost:3000
 ```
 
-Open http://localhost:3000 — the dashboard's **Reset demo** button loads the canonical
-scenario: a $2,400 monthly rent and three cards where the Aeroplan card wins this month
-(its welcome bonus completes), the 2% cashback card takes over next month, and the 1.5%
-card serves as backup when the others fail. The dashboard also shows priority-aware
-routing: drag bills to reorder them, and higher-priority bills reserve credit headroom
-and bonus progress before lower ones are scored, with any "off optimal" loss quantified
-per payment.
+Open http://localhost:3000 — the dashboard's **Reset demo** button loads the demo from
+the committed data fixtures: the Sarah scenario's four catalog-backed cards (RBC Avion
+Visa Infinite, Amex Gold Rewards, Scotia Momentum Visa Infinite, Rogers Red World
+Elite — real public product terms from `data/cards.json`, synthetic account state) and
+its six recurring bills. Rent should switch to the Amex Gold card because the payment
+completes its $500 welcome bonus. The dashboard shows priority-aware routing: drag
+bills to reorder them, and higher-priority bills reserve credit headroom and bonus
+progress before lower ones are scored, with any "off optimal" loss quantified per
+payment.
 
 Key properties:
 
