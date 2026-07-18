@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
+from math import ceil
 from time import perf_counter
 
 from engine.config import DEFAULT_ENGINE_CONFIG, EngineConfig
@@ -285,12 +286,25 @@ def sample_frontier(
             truncation_reason = "time_budget"
             break
         attempted += 1
+        solve_config = config
+        if method is SolverMethod.ILP:
+            remaining_seconds = max(
+                1,
+                ceil(config.frontier_timeout_seconds - (perf_counter() - started)),
+            )
+            solve_config = replace(
+                config,
+                ilp_wall_timeout_seconds=min(
+                    config.ilp_wall_timeout_seconds,
+                    remaining_seconds,
+                ),
+            )
         allocation = _solve(
             cards,
             purchases,
             sweep_intent,
             method,
-            config,
+            solve_config,
             include_alternatives=False,
         )
         if not allocation.successful:

@@ -1,99 +1,293 @@
 {
-    "schema_version": "1.0",
-    "synthetic": true,
-    "attribution": "Fabricated reward structures for demonstration.",
-    "cards": [
+  "schema_version": "1.0",
+  "document_type": "product_catalog",
+  "verified_on": "2026-07-18",
+  "terms_notice": "Product names, annual fees, and earn rules are public issuer terms verified on the stated date. Point valuations may be static demo assumptions. Limits, balances, cycle dates, purchases, service qualification, and signup progress exist only in synthetic scenario files.",
+  "products": [
+    {
+      "id": "rbc-ion-plus",
+      "name": "RBC ION+ Visa",
+      "issuer": "rbc",
+      "network": "visa",
+      "reward_program": "Avion Rewards",
+      "annual_fee_cents": 4800,
+      "reward_rules": [
+        {"category": "groceries", "rate_bps": 300, "reward_type": "points"},
+        {"category": "gas", "rate_bps": 300, "reward_type": "points"},
+        {"category": "ev_charging", "rate_bps": 300, "reward_type": "points"},
+        {"category": "dining", "rate_bps": 300, "reward_type": "points"},
+        {"category": "food_delivery", "rate_bps": 300, "reward_type": "points"},
+        {"category": "transit", "rate_bps": 300, "reward_type": "points"},
+        {"category": "rideshare", "rate_bps": 300, "reward_type": "points"},
+        {"category": "streaming", "rate_bps": 300, "reward_type": "points"},
+        {"category": "gaming", "rate_bps": 300, "reward_type": "points"},
+        {"category": "digital_media", "rate_bps": 300, "reward_type": "points"}
+      ],
+      "base_rate_bps": 100,
+      "base_reward_type": "points",
+      "point_value_millicents": 714,
+      "point_value_basis": "Official example states 1,400 Avion points can redeem for a $10 gift card; the engine floors that ratio to 714 millicents per point.",
+      "public_offer_summary": "Issuer page advertised up to 28,000 Avion points for applications by November 4, 2026; this volatile offer is not modeled.",
+      "engine_assumptions": [
+        "Accelerated categories are treated as available throughout the synthetic planning horizon."
+      ],
+      "unmodeled_terms": [
+        "Merchant category eligibility and posting classification are not simulated.",
+        "Partner bonuses, annual-fee rebates, redemption minimums, and varying gift-card values are not modeled."
+      ],
+      "sources": [
         {
-            "id": "harbor-rent",
-            "name": "Harbor Rent (synthetic)",
-            "credit_limit_cents": 500_000,
-            "current_balance_cents": 0,
-            "reward_rules": [
-                {
-                    "category": "rent",
-                    "rate_bps": 200,
-                    "reward_type": "cashback"
-                }
-            ],
-            "base_rate_bps": 100,
-            "base_reward_type": "cashback",
-            "point_value_millicents": 0,
-            "annual_fee_cents": 0,
-            "statement_day": 25,
-            "due_day": 20,
-            "signup_bonus": null
-        },
-        {
-            "id": "summit-journey",
-            "name": "Summit Journey (synthetic)",
-            "credit_limit_cents": 1_200_000,
-            "current_balance_cents": 1_500_00,
-            "reward_rules": [
-                {
-                    "category": "travel",
-                    "rate_bps": 300,
-                    "reward_type": "points"
-                },
-                {
-                    "category": "dining",
-                    "rate_bps": 300,
-                    "reward_type": "points"
-                }
-            ],
-            "base_rate_bps": 100,
-            "base_reward_type": "points",
-            "point_value_millicents": 1250,
-            "annual_fee_cents": 9500,
-            "statement_day": 12,
-            "due_day": 7,
-            "signup_bonus": null
-        },
-        {
-            "id": "aurora-bonus",
-            "name": "Aurora Bonus (synthetic)",
-            "credit_limit_cents": 800_000,
-            "current_balance_cents": 5_000_00,
-            "reward_rules": [],
-            "base_rate_bps": 150,
-            "base_reward_type": "cashback",
-            "point_value_millicents": 0,
-            "annual_fee_cents": 0,
-            "statement_day": 5,
-            "due_day": 1,
-            "signup_bonus": {
-                "spend_required_cents": 4_000_00,
-                "spend_so_far_cents": 2_500_00,
-                "reward_value_cents": 500_00,
-                "deadline_date": "2026-08-31"
-            }
-        },
-        {
-            "id": "maple-everyday",
-            "name": "Maple Everyday (synthetic)",
-            "credit_limit_cents": 1_000_000,
-            "current_balance_cents": 25_000,
-            "reward_rules": [],
-            "base_rate_bps": 200,
-            "base_reward_type": "cashback",
-            "point_value_millicents": 0,
-            "annual_fee_cents": 0,
-            "statement_day": 15,
-            "due_day": 10,
-            "signup_bonus": null
-        },
-        {
-            "id": "cedar-starter",
-            "name": "Cedar Starter (synthetic)",
-            "credit_limit_cents": 200_000,
-            "current_balance_cents": 1_800_00,
-            "reward_rules": [],
-            "base_rate_bps": 100,
-            "base_reward_type": "cashback",
-            "point_value_millicents": 0,
-            "annual_fee_cents": 0,
-            "statement_day": 20,
-            "due_day": 15,
-            "signup_bonus": null
+          "url": "https://www.rbcroyalbank.com/credit-cards/rewards/rbc-ion-plus-visa.html",
+          "title": "RBC ION+ Visa official product page",
+          "verified_on": "2026-07-18",
+          "covers": ["product_name", "annual_fee", "earn_rates", "point_value", "public_offer"]
         }
-    ]
+      ]
+    },
+    {
+      "id": "rbc-avion-visa-infinite",
+      "name": "RBC Avion Visa Infinite",
+      "issuer": "rbc",
+      "network": "visa",
+      "reward_program": "Avion Rewards",
+      "annual_fee_cents": 12000,
+      "reward_rules": [
+        {"category": "travel", "rate_bps": 125, "reward_type": "points"}
+      ],
+      "base_rate_bps": 100,
+      "base_reward_type": "points",
+      "point_value_millicents": 2000,
+      "point_value_basis": "Static 2.0-cent travel-schedule demo valuation based on issuer max-travel examples. The issuer also shows a simple 100-points-for-$1 travel conversion, so actual value can be materially lower.",
+      "public_offer_summary": "Issuer page advertised up to 55,000 Avion points with a stated maximum travel value of $1,100; the offer is not modeled.",
+      "engine_assumptions": [
+        "The optimistic static travel valuation is used consistently for every Avion point in optimization."
+      ],
+      "unmodeled_terms": [
+        "Air Travel Redemption Schedule bands, taxes, transfers, partner bonuses, and redemption availability are not modeled.",
+        "Travel merchant classification is reduced to the scenario category named travel."
+      ],
+      "sources": [
+        {
+          "url": "https://www.rbcroyalbank.com/credit-cards/travel/rbc-avion-visa-infinite.html",
+          "title": "RBC Avion Visa Infinite official product page",
+          "verified_on": "2026-07-18",
+          "covers": ["product_name", "annual_fee", "earn_rates", "point_value", "public_offer"]
+        }
+      ]
+    },
+    {
+      "id": "td-rewards-visa",
+      "name": "TD Rewards Visa Card",
+      "issuer": "td",
+      "network": "visa",
+      "reward_program": "TD Rewards",
+      "annual_fee_cents": 0,
+      "reward_rules": [
+        {"category": "expedia_for_td", "rate_bps": 400, "reward_type": "points"},
+        {"category": "groceries", "rate_bps": 300, "reward_type": "points"},
+        {"category": "dining", "rate_bps": 300, "reward_type": "points"},
+        {"category": "transit", "rate_bps": 300, "reward_type": "points"},
+        {"category": "recurring", "rate_bps": 200, "reward_type": "points"},
+        {"category": "streaming", "rate_bps": 200, "reward_type": "points"},
+        {"category": "gaming", "rate_bps": 200, "reward_type": "points"},
+        {"category": "digital_media", "rate_bps": 200, "reward_type": "points"}
+      ],
+      "base_rate_bps": 100,
+      "base_reward_type": "points",
+      "point_value_millicents": 500,
+      "point_value_basis": "Official calculator example values 143,310 TD Rewards points at up to $716.55 for eligible Expedia for TD travel, equal to 0.5 cents per point.",
+      "public_offer_summary": "Issuer page advertised 30,310 points after $1,500 spend within 90 days; this volatile offer is not modeled.",
+      "engine_assumptions": [
+        "Synthetic scenarios assume accelerated category room remains under the issuer's annual caps."
+      ],
+      "unmodeled_terms": [
+        "The separate $5,000 annual caps for accelerated category groups are documented but not tracked by the engine.",
+        "Expedia for TD booking qualification, merchant classification, Starbucks linkage, and redemption increments are not modeled."
+      ],
+      "sources": [
+        {
+          "url": "https://www.td.com/ca/en/personal-banking/products/credit-cards/travel-rewards/rewards-visa-card",
+          "title": "TD Rewards Visa Card official product page",
+          "verified_on": "2026-07-18",
+          "covers": ["product_name", "annual_fee", "earn_rates", "point_value", "caps_and_conditions", "public_offer"]
+        }
+      ]
+    },
+    {
+      "id": "td-aeroplan-visa-infinite",
+      "name": "TD Aeroplan Visa Infinite Card",
+      "issuer": "td",
+      "network": "visa",
+      "reward_program": "Aeroplan",
+      "annual_fee_cents": 13900,
+      "reward_rules": [
+        {"category": "groceries", "rate_bps": 150, "reward_type": "points"},
+        {"category": "gas", "rate_bps": 150, "reward_type": "points"},
+        {"category": "ev_charging", "rate_bps": 150, "reward_type": "points"},
+        {"category": "air_canada", "rate_bps": 150, "reward_type": "points"},
+        {"category": "hyatt", "rate_bps": 150, "reward_type": "points"}
+      ],
+      "base_rate_bps": 100,
+      "base_reward_type": "points",
+      "point_value_millicents": 1500,
+      "point_value_basis": "Synthetic static assumption of 1.5 cents per Aeroplan point. Aeroplan pricing is dynamic and the issuer does not promise this value.",
+      "public_offer_summary": "Issuer page advertised a multi-stage offer of up to 40,000 Aeroplan points and a first-year fee rebate; it is not modeled.",
+      "engine_assumptions": [
+        "The static Aeroplan valuation is a documented demo assumption, not an issuer redemption guarantee."
+      ],
+      "unmodeled_terms": [
+        "Air Canada purchases must be direct to earn the accelerated rate; this is represented only by the air_canada category.",
+        "Dynamic flight pricing, free-bag benefits, Hyatt double-dip points, partner terms, and offer stages are not modeled."
+      ],
+      "sources": [
+        {
+          "url": "https://www.td.com/ca/en/personal-banking/products/credit-cards/aeroplan/aeroplan-visa-infinite-card",
+          "title": "TD Aeroplan Visa Infinite Card official product page",
+          "verified_on": "2026-07-18",
+          "covers": ["product_name", "annual_fee", "earn_rates", "caps_and_conditions", "public_offer"]
+        }
+      ]
+    },
+    {
+      "id": "amex-cobalt",
+      "name": "American Express Cobalt Card",
+      "issuer": "american_express",
+      "network": "american_express",
+      "reward_program": "Membership Rewards",
+      "annual_fee_cents": 19188,
+      "reward_rules": [
+        {"category": "groceries", "rate_bps": 500, "reward_type": "points"},
+        {"category": "dining", "rate_bps": 500, "reward_type": "points"},
+        {"category": "food_delivery", "rate_bps": 500, "reward_type": "points"},
+        {"category": "streaming", "rate_bps": 300, "reward_type": "points"},
+        {"category": "gas", "rate_bps": 200, "reward_type": "points"},
+        {"category": "transit", "rate_bps": 200, "reward_type": "points"},
+        {"category": "rideshare", "rate_bps": 200, "reward_type": "points"}
+      ],
+      "base_rate_bps": 100,
+      "base_reward_type": "points",
+      "point_value_millicents": 1000,
+      "point_value_basis": "Official page states 1,000 Membership Rewards points can cover $10 of eligible purchases.",
+      "public_offer_summary": "Issuer page advertised up to 15,000 points through monthly first-year spend milestones; the offer is not modeled.",
+      "engine_assumptions": [
+        "Eligible Canadian grocery purchases are mapped into the issuer's eats-and-drinks earn group for this demo.",
+        "The monthly fee is annualized to $191.88 in annual_fee_cents."
+      ],
+      "unmodeled_terms": [
+        "Merchant eligibility, issuer footnote conditions, accelerated-spend caps, statement credits, and monthly offer milestones are not tracked."
+      ],
+      "sources": [
+        {
+          "url": "https://www.americanexpress.com/en-ca/credit-cards/cobalt-card/",
+          "title": "American Express Cobalt Card official product page",
+          "verified_on": "2026-07-18",
+          "covers": ["product_name", "annual_fee", "earn_rates", "point_value", "caps_and_conditions", "public_offer"]
+        }
+      ]
+    },
+    {
+      "id": "amex-gold-rewards",
+      "name": "American Express Gold Rewards Card",
+      "issuer": "american_express",
+      "network": "american_express",
+      "reward_program": "Membership Rewards",
+      "annual_fee_cents": 25000,
+      "reward_rules": [
+        {"category": "travel", "rate_bps": 200, "reward_type": "points"},
+        {"category": "gas", "rate_bps": 200, "reward_type": "points"},
+        {"category": "groceries", "rate_bps": 200, "reward_type": "points"},
+        {"category": "drugstore", "rate_bps": 200, "reward_type": "points"}
+      ],
+      "base_rate_bps": 100,
+      "base_reward_type": "points",
+      "point_value_millicents": 1000,
+      "point_value_basis": "Official page states 1,000 Membership Rewards points can cover $10 of eligible purchases.",
+      "public_offer_summary": "Issuer page advertised up to 60,000 points through monthly first-year spend milestones; the live offer is not modeled.",
+      "engine_assumptions": [
+        "Any signup bonus attached to this product in a scenario is explicitly synthetic and independent of the current public offer."
+      ],
+      "unmodeled_terms": [
+        "Merchant eligibility, travel credits, lounge visits, statement credits, insurance, and monthly offer milestones are not modeled."
+      ],
+      "sources": [
+        {
+          "url": "https://www.americanexpress.com/en-ca/credit-cards/gold-rewards-card/",
+          "title": "American Express Gold Rewards Card official product page",
+          "verified_on": "2026-07-18",
+          "covers": ["product_name", "annual_fee", "earn_rates", "point_value", "public_offer"]
+        }
+      ]
+    },
+    {
+      "id": "scotia-momentum-visa-infinite",
+      "name": "Scotia Momentum Visa Infinite Card",
+      "issuer": "scotiabank",
+      "network": "visa",
+      "reward_program": "Scotia Momentum Cash Back",
+      "annual_fee_cents": 12000,
+      "reward_rules": [
+        {"category": "groceries", "rate_bps": 400, "reward_type": "cashback"},
+        {"category": "recurring", "rate_bps": 400, "reward_type": "cashback"},
+        {"category": "gas", "rate_bps": 200, "reward_type": "cashback"},
+        {"category": "ev_charging", "rate_bps": 200, "reward_type": "cashback"},
+        {"category": "transit", "rate_bps": 200, "reward_type": "cashback"},
+        {"category": "rideshare", "rate_bps": 200, "reward_type": "cashback"},
+        {"category": "food_delivery", "rate_bps": 200, "reward_type": "cashback"}
+      ],
+      "base_rate_bps": 100,
+      "base_reward_type": "cashback",
+      "point_value_millicents": 1000,
+      "point_value_basis": "Cashback is already denominated in Canadian cents; point valuation is neutral.",
+      "public_offer_summary": "Issuer page advertised 15% cashback for the first three months on up to $2,000 spend plus a first-year fee waiver; it is not modeled.",
+      "engine_assumptions": [
+        "Synthetic scenarios assume accelerated category room remains under each issuer annual cap."
+      ],
+      "unmodeled_terms": [
+        "The separate $25,000 annual spend limits for 4% and 2% categories are not tracked.",
+        "Visa merchant codes, automatic recurring-payment qualification, returns, statement-period reset dates, and issuer nearest-cent cashback rounding are simplified. Rent does not receive the recurring rate unless explicitly categorized recurring."
+      ],
+      "sources": [
+        {
+          "url": "https://www.scotiabank.com/ca/en/personal/credit-cards/visa/momentum-infinite-card.html",
+          "title": "Scotia Momentum Visa Infinite Card official product page",
+          "verified_on": "2026-07-18",
+          "covers": ["product_name", "annual_fee", "earn_rates", "public_offer"]
+        },
+        {
+          "url": "https://www.scotiabank.com/ca/en/personal/credit-cards/visa/momentum-infinite-card/welcome-kit/terms-conditions-momentum-infinite.html",
+          "title": "Scotia Momentum Visa Infinite Cash Back Program Terms",
+          "verified_on": "2026-07-18",
+          "covers": ["earn_rates", "caps_and_conditions"]
+        }
+      ]
+    },
+    {
+      "id": "rogers-red-world-elite",
+      "name": "Rogers Red World Elite Mastercard",
+      "issuer": "rogers_bank",
+      "network": "mastercard",
+      "reward_program": "Rogers Cash Back",
+      "annual_fee_cents": 0,
+      "reward_rules": [],
+      "base_rate_bps": 200,
+      "base_reward_type": "cashback",
+      "point_value_millicents": 1000,
+      "point_value_basis": "Cashback is already denominated in Canadian cents; point valuation is neutral.",
+      "engine_assumptions": [
+        "The synthetic account is assumed to have one qualifying Rogers, Fido, Shaw, or Comwave service, enabling the published 2% eligible-purchase rate."
+      ],
+      "unmodeled_terms": [
+        "Without a qualifying service the published eligible-purchase rate is 1.5%; account qualification is not dynamically checked.",
+        "The 3% U.S.-dollar earn rate, foreign exchange fees, and 1.5x Rogers-service redemption bonus are not modeled because purchases have no currency or redemption target."
+      ],
+      "sources": [
+        {
+          "url": "https://www.rogersbank.com/en/rogers_red_worldelite_mastercard_details",
+          "title": "Rogers Red World Elite Mastercard official product page",
+          "verified_on": "2026-07-18",
+          "covers": ["product_name", "annual_fee", "earn_rates", "caps_and_conditions"]
+        }
+      ]
+    }
+  ]
 }

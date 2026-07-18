@@ -63,3 +63,6 @@ def test_config_rejects_bool_and_out_of_range_numeric_values() -> None:
 
     with pytest.raises(ValueError, match="at most 10000"):
         EngineConfig(annual_carry_rate_bps=10_001)
+
+    with pytest.raises(ValueError, match="at most 60"):
+        EngineConfig(ilp_wall_timeout_seconds=61)

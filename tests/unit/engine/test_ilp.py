@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import time
 from datetime import date
+from multiprocessing.connection import Connection
 
 import pulp
 
@@ -8,6 +10,18 @@ from engine.config import EngineConfig
 from engine.ilp import allocate_ilp
 from engine.models import Card, Goal, Intent, OptimizationStatus, Purchase, SolverMethod
 from engine.optimize import allocate_month
+
+
+def sleeping_worker(
+    connection: Connection,
+    cards,
+    purchases,
+    intent,
+    config,
+    include_alternatives,
+) -> None:
+    time.sleep(10)
+    connection.close()
 
 
 def card(card_id: str, limit: int, rate: int) -> Card:
@@ -123,3 +137,22 @@ def test_valid_ids_that_normalize_similarly_do_not_collide_in_pulp() -> None:
 
     assert result.status is OptimizationStatus.OPTIMAL
     assert assignment_map(result) == {"p-1": "a-b", "p_1": "a-b"}
+
+
+def test_hard_wall_timeout_kills_worker_and_returns_greedy_fallback(monkeypatch) -> None:
+    import engine.ilp as ilp_module
+
+    monkeypatch.setattr(ilp_module, "_isolated_ilp_worker", sleeping_worker)
+    started = time.monotonic()
+    result = ilp_module.allocate_ilp(
+        [card("high", 20_000, 500), card("flat", 20_000, 100)],
+        [purchase("p1", 10_000)],
+        cashback_intent(),
+        EngineConfig(ilp_wall_timeout_seconds=1),
+    )
+    elapsed = time.monotonic() - started
+
+    assert elapsed < 5
+    assert result.status is OptimizationStatus.HEURISTIC_FALLBACK
+    assert result.issues[-1].code.value == "solver_timeout"
+    assert "hard wall-clock" in result.issues[-1].message

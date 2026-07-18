@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+import multiprocessing
+import os
+import subprocess
 from collections.abc import Mapping, Sequence
+from contextlib import suppress
+from multiprocessing.connection import Connection
+from time import monotonic
+from typing import Any
 
 import pulp
 
@@ -193,7 +200,10 @@ def _fix_lexicographically(
     config: EngineConfig,
 ) -> str:
     secondary, secondary_bound = _lexicographic_secondary(purchases, cards, variables)
-    if secondary_bound <= config.cbc_exact_integer_limit:
+    if secondary_bound <= min(
+        config.cbc_exact_integer_limit,
+        config.ilp_combined_tie_break_limit,
+    ):
         problem.setObjective(secondary)
         return _solve_status(problem, solver)
 
@@ -215,7 +225,7 @@ def _fix_lexicographically(
     return "Optimal"
 
 
-def allocate_ilp(
+def _allocate_ilp_internal(
     cards: Sequence[Card],
     purchases: Sequence[Purchase],
     intent: Intent,
@@ -554,3 +564,161 @@ def allocate_ilp(
         card_summaries=list(evaluation.card_summaries),
         metrics=evaluation.metrics,
     )
+
+
+def _isolated_ilp_worker(
+    connection: Connection,
+    cards: tuple[Card, ...],
+    purchases: tuple[Purchase, ...],
+    intent: Intent,
+    config: EngineConfig,
+    include_alternatives: bool,
+) -> None:
+    try:
+        result = _allocate_ilp_internal(
+            cards,
+            purchases,
+            intent,
+            config,
+            include_alternatives=include_alternatives,
+        )
+        connection.send(("result", result))
+    except BaseException as exc:
+        connection.send(("error", type(exc).__name__, str(exc)))
+    finally:
+        connection.close()
+
+
+def _terminate_process_tree(process: multiprocessing.Process) -> None:
+    if process.pid is not None and os.name == "nt":
+        with suppress(OSError, subprocess.SubprocessError):
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                check=False,
+                capture_output=True,
+                timeout=5,
+            )
+    if process.is_alive():
+        process.terminate()
+        process.join(timeout=2)
+    if process.is_alive():
+        process.kill()
+        process.join(timeout=2)
+
+
+def _receive_isolated_result(
+    process: multiprocessing.Process,
+    connection: Connection,
+    timeout_seconds: int,
+) -> tuple[Any, ...] | None:
+    deadline = monotonic() + timeout_seconds
+    while True:
+        remaining = deadline - monotonic()
+        if remaining <= 0:
+            return None
+        if connection.poll(min(0.1, remaining)):
+            try:
+                return connection.recv()
+            except EOFError:
+                return ("dead", process.exitcode)
+        if not process.is_alive():
+            if connection.poll():
+                try:
+                    return connection.recv()
+                except EOFError:
+                    pass
+            return ("dead", process.exitcode)
+
+
+def allocate_ilp(
+    cards: Sequence[Card],
+    purchases: Sequence[Purchase],
+    intent: Intent,
+    config: EngineConfig = DEFAULT_ENGINE_CONFIG,
+    *,
+    solver: pulp.LpSolver | None = None,
+    include_alternatives: bool = True,
+) -> AllocationResult:
+    """Solve exactly in a killable worker, with verified greedy fallback."""
+
+    if solver is not None:
+        return _allocate_ilp_internal(
+            cards,
+            purchases,
+            intent,
+            config,
+            solver=solver,
+            include_alternatives=include_alternatives,
+        )
+
+    context = multiprocessing.get_context("spawn")
+    receive_connection, send_connection = context.Pipe(duplex=False)
+    process = context.Process(
+        target=_isolated_ilp_worker,
+        args=(
+            send_connection,
+            tuple(cards),
+            tuple(purchases),
+            intent,
+            config,
+            include_alternatives,
+        ),
+        name="payment-engine-ilp",
+        daemon=False,
+    )
+    try:
+        process.start()
+        send_connection.close()
+        payload = _receive_isolated_result(
+            process,
+            receive_connection,
+            config.ilp_wall_timeout_seconds,
+        )
+        if payload is None:
+            _terminate_process_tree(process)
+            return _fallback(
+                cards,
+                purchases,
+                intent,
+                config,
+                _solver_issue(
+                    IssueCode.SOLVER_TIMEOUT,
+                    "CBC exceeded the hard wall-clock solve limit of "
+                    f"{config.ilp_wall_timeout_seconds} seconds.",
+                ),
+            )
+        process.join(timeout=2)
+        if process.is_alive():
+            _terminate_process_tree(process)
+        if payload[0] == "result":
+            return payload[1]
+        if payload[0] == "error":
+            detail = f"{payload[1]}: {payload[2]}"
+        else:
+            detail = f"worker exited with code {payload[1]}"
+        return _fallback(
+            cards,
+            purchases,
+            intent,
+            config,
+            _solver_issue(
+                IssueCode.SOLVER_ERROR,
+                f"The isolated CBC worker failed ({detail}).",
+            ),
+        )
+    except (OSError, RuntimeError, ValueError) as exc:
+        if process.is_alive():
+            _terminate_process_tree(process)
+        return _fallback(
+            cards,
+            purchases,
+            intent,
+            config,
+            _solver_issue(
+                IssueCode.SOLVER_ERROR,
+                f"The isolated CBC worker could not start ({type(exc).__name__}: {exc}).",
+            ),
+        )
+    finally:
+        receive_connection.close()
+        send_connection.close()

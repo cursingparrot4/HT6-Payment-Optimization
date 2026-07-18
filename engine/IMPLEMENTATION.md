@@ -172,7 +172,9 @@ class EngineConfig:
     greedy_repair_depth: int = 2
     local_search_max_passes: int = 20
     ilp_timeout_seconds: int = 5
+    ilp_wall_timeout_seconds: int = 60
     ilp_max_card_states: int = 5_000
+    ilp_combined_tie_break_limit: int = 1_000_000
     frontier_two_goal_steps: int = 5
     frontier_three_goal_denominator: int = 4
     frontier_max_solves: int = 15
@@ -447,7 +449,9 @@ This guarantees the tie-break cannot change a one-unit primary preference in exa
 - `LpStatusInfeasible`: return `infeasible` with analyzer diagnostics.
 - Timeout/not solved/error: ignore any unverified CBC incumbent and call the tested greedy allocator. If it succeeds, return that plan as `heuristic_fallback` with `solver_method=greedy`; otherwise preserve `unresolved`/proven `infeasible` and include the exact-solver issue.
 
-Do not claim the best incumbent is optimal. Record solve duration in debug logs, not deterministic response payloads.
+Every normal CBC call runs inside a spawned worker process. `ilp_timeout_seconds` is passed to CBC as its internal target, while `ilp_wall_timeout_seconds` is an absolute caller-side watchdog constrained to `1..60` seconds. If CBC ignores its internal timer, hangs in `wait()`, or exits natively, the parent kills the complete worker/CBC process tree and returns the verified greedy fallback. Injected test solvers remain in-process for deterministic unit testing.
+
+Small assignment keys use one combined secondary solve. Larger keys use sequential lexicographic fixing to avoid numerically dangerous exponential objective coefficients. The process watchdog covers primary solving, tie-breaking, verification, and alternative generation. Do not claim the best incumbent is optimal. Record solve duration in debug logs, not deterministic response payloads.
 
 ## 13. Sampled strategy frontier
 
@@ -523,6 +527,7 @@ Return integer deltas `override - base` for reward value, max utilization, cashf
 - Verify utilization piecewise parity.
 - Verify bonus hit and partial progress.
 - Verify timeout fallback status through an injected/mocked solver boundary.
+- Verify the caller-side wall watchdog kills a sleeping worker and returns fallback.
 - Assert optimal utility is at least greedy utility on the same feasible scenario.
 
 ### Frontier and what-if

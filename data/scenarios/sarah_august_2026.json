@@ -1,90 +1,121 @@
 {
-    "schema_version": "1.0",
-    "id": "sarah-august-2026",
-    "name": "Sarah's August plan",
-    "synthetic": true,
-    "reference_date": "2026-07-18",
-    "card_ids": [
-        "harbor-rent",
-        "summit-journey",
-        "aurora-bonus",
-        "cedar-starter"
-    ],
-    "purchases": [
-        {
-            "id": "rent-2026-08",
-            "amount_cents": 220000,
-            "category": "rent",
-            "date": "2026-08-01",
-            "is_recurring": true,
-            "locked_card_id": null
-        },
-        {
-            "id": "groceries-2026-08-05",
-            "amount_cents": 12500,
-            "category": "groceries",
-            "date": "2026-08-05",
-            "is_recurring": false,
-            "locked_card_id": null
-        },
-        {
-            "id": "dining-2026-08-10",
-            "amount_cents": 8500,
-            "category": "dining",
-            "date": "2026-08-10",
-            "is_recurring": false,
-            "locked_card_id": null
-        },
-        {
-            "id": "travel-flight-2026-08-15",
-            "amount_cents": 45000,
-            "category": "travel",
-            "date": "2026-08-15",
-            "is_recurring": false,
-            "locked_card_id": null
-        },
-        {
-            "id": "utilities-2026-08-20",
-            "amount_cents": 15000,
-            "category": "utilities",
-            "date": "2026-08-20",
-            "is_recurring": true,
-            "locked_card_id": null
-        },
-        {
-            "id": "misc-large-2026-08-25",
-            "amount_cents": 35000,
-            "category": "other",
-            "date": "2026-08-25",
-            "is_recurring": false,
-            "locked_card_id": null
-        }
-    ],
-    "demo_intents": {
-        "mortgage": {
-            "weights": {
-                "max_cashback": 0.1,
-                "max_travel": 0.1,
-                "credit_health": 0.6,
-                "hit_signup_bonus": 0.1,
-                "max_cashflow": 0.05,
-                "min_risk": 0.05
-            },
-            "constraints": {
-                "max_utilization_bps": 3000,
-                "max_utilization_until": "2026-10-18"
-            }
-        },
-        "travel": {
-            "weights": {
-                "max_cashback": 0.1,
-                "max_travel": 0.6,
-                "credit_health": 0.1,
-                "hit_signup_bonus": 0.1,
-                "max_cashflow": 0.05,
-                "min_risk": 0.05
-            },
-            "constraints": {}
-        }
+  "schema_version": "1.0",
+  "document_type": "scenario",
+  "id": "sarah-august-2026",
+  "name": "Sarah's August 2026 payment plan",
+  "synthetic_persona": true,
+  "persona_label": "Sarah (synthetic)",
+  "reference_date": "2026-07-18",
+  "accounts": [
+    {
+      "product_id": "rbc-avion-visa-infinite",
+      "credit_limit_cents": 1500000,
+      "current_balance_cents": 150000,
+      "statement_day": 18,
+      "due_day": 13,
+      "assumptions": [
+        "Limit, balance, statement day, and due day are synthetic.",
+        "Static Avion point value is the catalog's documented optimistic travel assumption."
+      ]
+    },
+    {
+      "product_id": "amex-gold-rewards",
+      "credit_limit_cents": 1200000,
+      "current_balance_cents": 180000,
+      "statement_day": 20,
+      "due_day": 15,
+      "synthetic_signup_bonus": {
+        "spend_required_cents": 400000,
+        "spend_so_far_cents": 260000,
+        "reward_value_cents": 50000,
+        "deadline_date": "2026-10-31"
+      },
+      "assumptions": [
+        "Limit, balance, statement day, and due day are synthetic.",
+        "The $4,000 threshold, $2,600 prior progress, $500 value, and deadline form a synthetic one-stage bonus and do not describe the issuer's current public offer."
+      ]
+    },
+    {
+      "product_id": "scotia-momentum-visa-infinite",
+      "credit_limit_cents": 800000,
+      "current_balance_cents": 100000,
+      "statement_day": 11,
+      "due_day": 6,
+      "assumptions": [
+        "Limit, balance, statement day, and due day are synthetic.",
+        "Accelerated-category annual caps are assumed unused before this month."
+      ]
+    },
+    {
+      "product_id": "rogers-red-world-elite",
+      "credit_limit_cents": 1000000,
+      "current_balance_cents": 100000,
+      "statement_day": 27,
+      "due_day": 22,
+      "assumptions": [
+        "Limit, balance, statement day, and due day are synthetic.",
+        "Sarah is synthetically assumed to hold one qualifying Rogers-family service, enabling the catalog's 2% base rate."
+      ]
     }
+  ],
+  "purchases": [
+    {"id": "rent-aug", "amount_cents": 220000, "category": "rent", "date": "2026-08-01", "is_recurring": true, "locked_card_id": null},
+    {"id": "groceries-01", "amount_cents": 19000, "category": "groceries", "date": "2026-08-03", "is_recurring": false, "locked_card_id": null},
+    {"id": "transit-pass", "amount_cents": 13000, "category": "transit", "date": "2026-08-04", "is_recurring": true, "locked_card_id": null},
+    {"id": "dining-01", "amount_cents": 7000, "category": "dining", "date": "2026-08-05", "is_recurring": false, "locked_card_id": null},
+    {"id": "utilities", "amount_cents": 12000, "category": "recurring", "date": "2026-08-06", "is_recurring": true, "locked_card_id": null},
+    {"id": "streaming", "amount_cents": 2000, "category": "streaming", "date": "2026-08-07", "is_recurring": true, "locked_card_id": null},
+    {"id": "gas", "amount_cents": 7000, "category": "gas", "date": "2026-08-08", "is_recurring": false, "locked_card_id": null},
+    {"id": "groceries-02", "amount_cents": 23000, "category": "groceries", "date": "2026-08-10", "is_recurring": false, "locked_card_id": null},
+    {"id": "drugstore", "amount_cents": 5000, "category": "drugstore", "date": "2026-08-11", "is_recurring": false, "locked_card_id": null},
+    {"id": "dining-02", "amount_cents": 9000, "category": "dining", "date": "2026-08-12", "is_recurring": false, "locked_card_id": null},
+    {"id": "flight", "amount_cents": 68000, "category": "travel", "date": "2026-08-13", "is_recurring": false, "locked_card_id": null},
+    {"id": "groceries-03", "amount_cents": 16000, "category": "groceries", "date": "2026-08-15", "is_recurring": false, "locked_card_id": null},
+    {"id": "home-repair", "amount_cents": 87000, "category": "other", "date": "2026-08-16", "is_recurring": false, "locked_card_id": null},
+    {"id": "rideshare", "amount_cents": 2000, "category": "rideshare", "date": "2026-08-18", "is_recurring": false, "locked_card_id": null},
+    {"id": "dining-03", "amount_cents": 7000, "category": "dining", "date": "2026-08-19", "is_recurring": false, "locked_card_id": null},
+    {"id": "groceries-04", "amount_cents": 20000, "category": "groceries", "date": "2026-08-21", "is_recurring": false, "locked_card_id": null},
+    {"id": "internet", "amount_cents": 9000, "category": "recurring", "date": "2026-08-22", "is_recurring": true, "locked_card_id": null},
+    {"id": "food-delivery", "amount_cents": 5000, "category": "food_delivery", "date": "2026-08-24", "is_recurring": false, "locked_card_id": null},
+    {"id": "hotel", "amount_cents": 44000, "category": "travel", "date": "2026-08-25", "is_recurring": false, "locked_card_id": null},
+    {"id": "insurance", "amount_cents": 14000, "category": "recurring", "date": "2026-08-27", "is_recurring": true, "locked_card_id": null}
+  ],
+  "demo_intents": {
+    "mortgage": {
+      "weights": {
+        "max_cashback": 0.05,
+        "max_travel": 0.05,
+        "credit_health": 0.45,
+        "hit_signup_bonus": 0.3,
+        "max_cashflow": 0.05,
+        "min_risk": 0.1
+      },
+      "constraints": {
+        "max_utilization_bps": 3000,
+        "max_utilization_until": "2026-10-18",
+        "must_hit_bonus_card_ids": []
+      }
+    },
+    "travel": {
+      "weights": {
+        "max_cashback": 0.05,
+        "max_travel": 0.75,
+        "credit_health": 0.05,
+        "hit_signup_bonus": 0.05,
+        "max_cashflow": 0.05,
+        "min_risk": 0.05
+      },
+      "constraints": {
+        "max_utilization_bps": null,
+        "max_utilization_until": null,
+        "must_hit_bonus_card_ids": []
+      }
+    }
+  },
+  "notes": [
+    "All account state, purchase data, persona details, and signup progress are synthetic.",
+    "Rent is assigned the base earn rate; no issuer recurring-payment multiplier is assumed for Chexy rent classification.",
+    "Chexy processing fees are outside the current objective because the scenario assumes the same payment-channel fee regardless of selected card.",
+    "Accelerated earn caps are assumed available for the synthetic month; the catalog identifies every omitted cap or qualification rule."
+  ]
 }
