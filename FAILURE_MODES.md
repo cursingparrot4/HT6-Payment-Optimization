@@ -234,6 +234,46 @@ The UI says the heuristic did not find a plan, not that no plan exists.
 
 **Behavior:** show successful sampled plans, attempted/successful count, warnings, and incomplete disclosure. If no solve succeeds, show domain failure only.
 
+## 8b. SwitchPay payment-lifecycle failures (implemented in `api/`)
+
+The shipped SwitchPay layer adds a simulated payment lifecycle on top of the engine.
+Its failure contract:
+
+### Duplicate payment request
+
+**Detection:** every `POST /api/payments/{id}/pay` carries a client-generated
+idempotency key; the `transactions.idempotency_key` column is UNIQUE.
+
+**Behavior:** a repeated key returns the original transaction with `duplicate: true`
+and logs `duplicate_blocked`. A second synthetic charge is never created.
+
+### Card declined / insufficient credit / locked / expired
+
+**Detection:** simulator scenario, with defensive pre-checks — a locked, expired, or
+over-limit card overrides an optimistic scenario at pay time.
+
+**Behavior:** the transaction moves to `failed` through validated state transitions,
+the card's `recent_failures` increments (penalizing it in future rankings), and the
+card-selection algorithm reruns excluding the failed card to recommend the backup.
+No retry or switch happens without user approval.
+
+### Network timeout / unknown authorization status
+
+**Detection:** simulator scenario ends in `status_uncertain`.
+
+**Behavior:** the transaction parks; the UI states "Payment status is uncertain.
+SwitchPay will verify the original transaction before attempting another charge."
+There is no automatic retry. Verification either resumes the original charge
+(confirmed — no second charge) or marks it failed (not found — safe to retry with a
+new idempotency key).
+
+### Illegal state transition
+
+**Detection:** every transition is validated against `ALLOWED_TRANSITIONS` in
+`api/state_machine.py`; simulator scripts are tested to be legal walks.
+
+**Behavior:** an illegal transition raises before any state is written.
+
 ## 9. Privacy/security posture
 
 - Repository fixtures and demo text are synthetic.

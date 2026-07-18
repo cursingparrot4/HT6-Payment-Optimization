@@ -1,6 +1,59 @@
-# Payment Optimization Engine
+# SwitchPay — Payment Optimization Engine
 
-A hackathon prototype that separates language understanding from financial calculation:
+**SwitchPay** (Hack the 6ix, Chexy track) is a card-switching and payment-routing system:
+it reevaluates the best funding card before every major recurring payment (rent, tuition,
+utilities, insurance, taxes) and safely adapts when rewards, welcome bonuses, balances,
+limits, deadlines, or card availability change. All data is synthetic; no real money moves.
+
+## Run SwitchPay
+
+Backend (FastAPI + SQLite, reuses the deterministic `engine` scoring):
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+.venv/bin/uvicorn api.main:app --port 8000
+```
+
+Frontend (Next.js + TypeScript + Tailwind):
+
+```bash
+cd ui/web
+npm install
+npm run dev   # http://localhost:3000
+```
+
+Open http://localhost:3000 — the dashboard's **Reset demo** button loads the canonical
+scenario: a $2,400 monthly rent and three cards where the Aeroplan card wins this month
+(its welcome bonus completes), the 2% cashback card takes over next month, and the 1.5%
+card serves as backup when the others fail. The dashboard also shows priority-aware
+routing: drag bills to reorder them, and higher-priority bills reserve credit headroom
+and bonus progress before lower ones are scored, with any "off optimal" loss quantified
+per payment.
+
+Key properties:
+
+- **Deterministic recommendations.** All reward, bonus, utilization, headroom, and fee math
+  is integer-cent arithmetic in `engine/scoring.py` + `api/recommender.py`. No AI model
+  performs arithmetic or makes the final financial decision.
+- **Explicit payment state machine** (`api/state_machine.py`): scheduled → authorization
+  pending → authorized → processing → recipient paid → reconciled, with failed and
+  status-uncertain branches. The simulator can trigger declines, insufficient credit,
+  locked/expired cards, network timeouts, duplicate requests, and unknown authorization.
+- **Idempotency keys** make double-pay clicks return the original transaction instead of
+  creating a second charge. Uncertain payments are never blindly retried — SwitchPay
+  verifies the original transaction first. Confirmed declines rerun card selection and
+  recommend the backup card without duplicating the payment.
+- **User-approved switches.** Every card switch requires explicit approval; every payment
+  action is written to an audit log. Cards are stored as fake `synthetic_tok_*` tokens —
+  no real card numbers exist anywhere.
+
+Validate the SwitchPay layer: `.venv/bin/python -m pytest tests/unit -q`
+
+---
+
+The sections below describe the broader hackathon prototype this repo also hosts, which
+separates language understanding from financial calculation:
 
 - A deterministic engine recommends a card and allocates a synthetic month of purchases.
 - A small SFT model parses natural-language goals into validated preferences and constraints.
@@ -20,16 +73,16 @@ No real accounts, credentials, personally identifying information, or money move
 
 ## Module map
 
-| Module | Responsibility |
-|---|---|
-| `engine` | Domain models, integer scoring, constraints, optimization, and what-if |
-| `data` | Validated synthetic card and purchase scenarios |
-| `intent` | LLM provider boundary, output validation, SFT data generation |
-| `explain` | Structured templates derived from engine facts |
-| `api` | FastAPI schemas and orchestration |
-| `ui` | Streamlit HTTP client and operational demo |
-| `eval` | Frozen model comparisons and downstream decision metrics |
-| `tests` | Unit, property, oracle, contract, and end-to-end verification |
+| Module | Responsibility | Status |
+|---|---|---|
+| `engine` | Domain models, integer scoring, constraints, optimization, and what-if | Implemented through greedy allocation; ILP/frontier/what-if pending |
+| `data` | Validated synthetic card and purchase scenarios | Holds SwitchPay's runtime SQLite (`data/switchpay.db`, gitignored); scenario fixtures pending |
+| `intent` | LLM provider boundary, output validation, SFT data generation | Pending (guide only) |
+| `explain` | Structured templates derived from engine facts | Pending (guide only) |
+| `api` | FastAPI orchestration: SwitchPay product endpoints plus engine `/api/recommend`, `/api/allocate`, `/api/demo-scenario` | Implemented |
+| `ui` | SwitchPay web app (Next.js + TypeScript + Tailwind, in `ui/web`); the original guide planned Streamlit | Implemented |
+| `eval` | Frozen model comparisons and downstream decision metrics | Pending (guide only) |
+| `tests` | Unit, property, oracle, contract, and end-to-end verification | `tests/unit/engine` + `tests/unit/api` implemented |
 
 ## Environment
 
@@ -43,14 +96,15 @@ py -m venv .venv
 
 ## Current implementation
 
-The deterministic engine is implemented through the greedy monthly-allocation milestone: shared contracts, fixed-point weights, scoring, feasibility, exact single-purchase recommendation, aggregate plan evaluation, bounded repair/local search, and final-state alternatives. Exact ILP, sampled strategies, what-if, synthetic scenario files, parser/eval adapters, explanations, API, and UI remain pending.
+The deterministic engine is implemented through the greedy monthly-allocation milestone: shared contracts, fixed-point weights, scoring, feasibility, exact single-purchase recommendation, aggregate plan evaluation, bounded repair/local search, and final-state alternatives. On top of it, the SwitchPay product layer is implemented end to end: the FastAPI backend (`api/`) with card/payment CRUD, priority-aware routing (`PUT /api/payment-priorities`, `build_priority_plan`), switch recommendations, the payment state machine with idempotency and failover, and versioned engine endpoints (`/api/recommend`, `/api/allocate`, `/api/demo-scenario`); and the Next.js UI (`ui/web`).
 
-Validate the current module:
+Still pending from the original plan: exact ILP, sampled strategy frontier, what-if, committed scenario fixture files, the intent parser (`intent/`), the templated explanation layer (`explain/`) as a separate module, and model evaluation (`eval/`). SwitchPay's recommendation explanations are currently templated inside `api/recommender.py`.
 
-```powershell
-uv sync --extra dev
-uv run python -m pytest tests/unit/engine -q
-uv run python -m ruff check engine tests/unit/engine
+Validate everything implemented:
+
+```bash
+.venv/bin/python -m pytest tests/unit -q          # 125 tests: engine + SwitchPay layer
+.venv/bin/python -m ruff check api engine tests/unit
 ```
 
-The generated Windows `pytest.exe` launcher may be denied in some environments; `uv run python -m pytest` is the verified invocation.
+On Windows with uv: `uv sync --extra dev`, then `uv run python -m pytest tests/unit -q` (the generated `pytest.exe` launcher may be denied in some environments; `uv run python -m pytest` is the verified invocation).

@@ -1,5 +1,13 @@
 # Streamlit UI Implementation Guide
 
+> **Status (2026-07-18):** this guide planned a Streamlit demo, but the shipped UI is the
+> SwitchPay web app in `ui/web` — Next.js 14 + TypeScript + Tailwind, run with
+> `npm run dev` (see `ui/web/README.md`). It talks to the FastAPI backend over HTTP and
+> follows this guide's core boundary rule: it never recomputes financial metrics, it only
+> renders structured API output. The Streamlit-specific file layout, run contract, and
+> visual direction below were superseded by the shipped design and are kept for reference
+> only.
+
 ## 1. Mission and boundary
 
 The UI is the operational demo surface for the synthetic payment planner. The first screen is the actual tool: portfolio and goal controls alongside the monthly plan. It is not a marketing landing page.
