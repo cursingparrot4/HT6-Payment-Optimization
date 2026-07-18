@@ -174,7 +174,7 @@ Even with repair, failure is not a proof. Return:
 
 ### Exact ILP
 
-Binary assignment variables represent indivisible purchase routing. Additive rewards and cashflow are constant coefficients. Dated ceilings are linear. Convex utilization uses piecewise spend segments with nondecreasing slopes. Risk headroom uses a nonnegative shortfall variable. Bonus completion uses eligible-spend expressions and binary hit variables.
+Binary assignment variables represent indivisible purchase routing. Additive rewards and cashflow are constant coefficients. Dated ceilings are linear. Aggregate utilization/risk and bonus utility use capped sets of reachable spend totals with one binary state selected per card. Every state coefficient is precomputed by the same pure Python evaluator; scenarios exceeding the state cap fall back honestly rather than approximating.
 
 CBC optimal status supports an `optimal` label. CBC infeasible status supports an `infeasible` label. A timeout with an incumbent is not proven optimal; for predictable API behavior, return the independently verified greedy plan as `heuristic_fallback` and include the timeout issue rather than exposing an ambiguous incumbent in the first version.
 

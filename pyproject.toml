@@ -36,6 +36,9 @@ exclude = ["tests*"]
 addopts = "--strict-config --strict-markers"
 testpaths = ["tests"]
 xfail_strict = true
+markers = [
+    "oracle: brute-force or hand-calculated exactness checks",
+]
 
 [tool.ruff]
 line-length = 100

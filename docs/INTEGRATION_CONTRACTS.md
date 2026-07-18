@@ -263,6 +263,7 @@ This cross-multiplied comparison is exact. Eligibility is inclusive: `purchase.d
 |---|---|
 | `duplicate_id` | Duplicate card or purchase ID |
 | `unknown_locked_card` | Purchase lock references an absent card |
+| `unknown_purchase` | What-if or assignment input references an absent purchase |
 | `unknown_assigned_card` | Assignment references an absent card |
 | `missing_assignment` | A purchase has no assignment entry |
 | `purchase_locked_to_other_card` | Assignment/candidate conflicts with a valid purchase lock |

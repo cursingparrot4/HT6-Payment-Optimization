@@ -281,7 +281,7 @@ def _local_search(
     return current
 
 
-def _metric_delta(override: AllocationMetrics, base: AllocationMetrics) -> MetricDelta:
+def metric_delta(override: AllocationMetrics, base: AllocationMetrics) -> MetricDelta:
     return MetricDelta(
         cashback_cents=override.cashback_cents - base.cashback_cents,
         travel_value_cents=override.travel_value_cents - base.travel_value_cents,
@@ -304,7 +304,7 @@ def _metric_delta(override: AllocationMetrics, base: AllocationMetrics) -> Metri
     )
 
 
-def _attach_alternatives(
+def attach_alternatives(
     cards: Sequence[Card],
     purchases: Sequence[Purchase],
     intent: Intent,
@@ -342,7 +342,7 @@ def _attach_alternatives(
                         moved_evaluation.objective.total_utility
                         - evaluation.objective.total_utility
                     ),
-                    metric_deltas=_metric_delta(moved_evaluation.metrics, evaluation.metrics),
+                    metric_deltas=metric_delta(moved_evaluation.metrics, evaluation.metrics),
                 )
             )
         alternatives.sort(
@@ -432,7 +432,7 @@ def allocate_greedy(
     return AllocationResult(
         status=OptimizationStatus.HEURISTIC,
         solver_method=SolverMethod.GREEDY,
-        assignments=_attach_alternatives(
+        assignments=attach_alternatives(
             cards, purchases, intent, assignments, evaluation, config
         ),
         card_summaries=list(evaluation.card_summaries),

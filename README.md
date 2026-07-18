@@ -43,14 +43,14 @@ py -m venv .venv
 
 ## Current implementation
 
-The deterministic engine is implemented through the greedy monthly-allocation milestone: shared contracts, fixed-point weights, scoring, feasibility, exact single-purchase recommendation, aggregate plan evaluation, bounded repair/local search, and final-state alternatives. Exact ILP, sampled strategies, what-if, synthetic scenario files, parser/eval adapters, explanations, API, and UI remain pending.
+The deterministic engine module is complete: shared contracts, fixed-point weights, scoring, feasibility, exact single-purchase recommendation, greedy repair/local search, exact all-binary PuLP/CBC allocation with brute-force parity checks, sampled strategy frontier, reoptimized what-if, and final-state alternatives. Synthetic scenario files, parser/eval adapters, explanation templates, API, and UI remain pending.
 
 Validate the current module:
 
 ```powershell
 uv sync --extra dev
-uv run python -m pytest tests/unit/engine -q
-uv run python -m ruff check engine tests/unit/engine
+uv run python -m pytest tests/unit/engine tests/oracle -q
+uv run python -m ruff check engine tests/unit/engine tests/oracle
 ```
 
 The generated Windows `pytest.exe` launcher may be denied in some environments; `uv run python -m pytest` is the verified invocation.
