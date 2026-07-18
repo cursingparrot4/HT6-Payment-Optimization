@@ -75,6 +75,7 @@ class SolverMethod(StrEnum):
 class IssueCode(StrEnum):
     DUPLICATE_ID = "duplicate_id"
     UNKNOWN_LOCKED_CARD = "unknown_locked_card"
+    UNKNOWN_PURCHASE = "unknown_purchase"
     UNKNOWN_ASSIGNED_CARD = "unknown_assigned_card"
     MISSING_ASSIGNMENT = "missing_assignment"
     PURCHASE_LOCKED_TO_OTHER_CARD = "purchase_locked_to_other_card"

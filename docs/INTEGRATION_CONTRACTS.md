@@ -13,6 +13,7 @@ This document is the shared boundary between parallel workstreams. It specifies 
 | Parser metadata and fallback state | `intent/models.py` | API, UI, eval |
 | Explanation blocks | `explain/models.py` | API, UI |
 | HTTP request and response wrappers | `api/schemas.py` | UI and API tests |
+| Public product provenance and synthetic account/scenario documents | `data/models.py` | Data loaders, API, UI, eval |
 
 No consumer should copy a Pydantic model just to avoid an import. If a consumer needs a presentation-only shape, it may define that shape locally but cannot change the meaning of a domain field.
 
@@ -263,6 +264,7 @@ This cross-multiplied comparison is exact. Eligibility is inclusive: `purchase.d
 |---|---|
 | `duplicate_id` | Duplicate card or purchase ID |
 | `unknown_locked_card` | Purchase lock references an absent card |
+| `unknown_purchase` | What-if or assignment input references an absent purchase |
 | `unknown_assigned_card` | Assignment references an absent card |
 | `missing_assignment` | A purchase has no assignment entry |
 | `purchase_locked_to_other_card` | Assignment/candidate conflicts with a valid purchase lock |
@@ -279,6 +281,8 @@ This cross-multiplied comparison is exact. Eligibility is inclusive: `purchase.d
 | `heuristic_dead_end` | Greedy and bounded repair did not find a complete plan; feasibility is unproven |
 | `solver_timeout` | Exact solve did not finish in the configured limit |
 | `solver_error` | Exact solver failed unexpectedly |
+
+Normal exact solves are isolated behind a caller-side wall-clock watchdog. The configured limit is 1-60 seconds; timeout or native worker failure cannot block the API indefinitely and returns an honestly labeled greedy fallback when available. Sampled-frontier solves inherit the smaller remaining total frontier budget.
 
 Every issue contains `code`, `message`, affected card/purchase IDs, optional integer `actual`, optional integer `required`, and a concrete `suggestion`. Messages are presentation-ready but tests assert codes and values rather than full prose.
 

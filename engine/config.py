@@ -62,6 +62,9 @@ class EngineConfig:
     greedy_repair_depth: int = 2
     local_search_max_passes: int = 20
     ilp_timeout_seconds: int = 5
+    ilp_wall_timeout_seconds: int = 60
+    ilp_max_card_states: int = 5_000
+    ilp_combined_tie_break_limit: int = 1_000_000
     frontier_two_goal_steps: int = 5
     frontier_three_goal_denominator: int = 4
     frontier_max_solves: int = 15
@@ -104,6 +107,18 @@ class EngineConfig:
         _require_int("greedy_repair_depth", self.greedy_repair_depth, minimum=0)
         _require_int("local_search_max_passes", self.local_search_max_passes, minimum=1)
         _require_int("ilp_timeout_seconds", self.ilp_timeout_seconds, minimum=1)
+        _require_int(
+            "ilp_wall_timeout_seconds",
+            self.ilp_wall_timeout_seconds,
+            minimum=1,
+            maximum=60,
+        )
+        _require_int("ilp_max_card_states", self.ilp_max_card_states, minimum=2)
+        _require_int(
+            "ilp_combined_tie_break_limit",
+            self.ilp_combined_tie_break_limit,
+            minimum=1,
+        )
         _require_int("frontier_two_goal_steps", self.frontier_two_goal_steps, minimum=2)
         _require_int(
             "frontier_three_goal_denominator",

@@ -1,8 +1,26 @@
-# Synthetic Data Implementation Guide
+# Product Reference and Synthetic Scenario Implementation Guide
+
+## Implementation status
+
+Implemented and validated:
+
+- Eight Canadian card product definitions sourced from official issuer pages and verified on `2026-07-18`.
+- Explicit issuer/network/reward-program provenance, source coverage, static point-value basis, engine assumptions, and unmodeled terms.
+- Strict separation between public product terms and synthetic account state.
+- Sarah's August 2026 scenario with four sourced products, twenty synthetic purchases, synthetic limits/balances/cycle dates, and one explicitly synthetic signup bonus.
+- Five downstream eval probes with intent-sensitive winners.
+- UTF-8 path-independent loaders, typed failures, cross-reference validation, and deep-copy isolation.
+
+Current focused gate: `uv run python -m pytest tests/unit/data -q` and `uv run python -m ruff check data tests/unit/data`. The Sarah suite includes greedy behavior checks and bounded 10-second exact requests for both demo intents; exact timeout is acceptable only as an explicit successful `heuristic_fallback`.
 
 ## 1. Mission and boundary
 
-The data module owns realistic-but-fake inputs that exercise the engine and tell the demo story. It provides validated loaders for a reusable card catalog and named scenarios. It never contains real cardholder data, credentials, copied issuer terms, or a hidden source of business logic.
+The data module owns two deliberately separate layers:
+
+1. **Public product reference data:** product names, issuer/network, ordinary annual fee, published earn rules, official source URLs, and a verification date.
+2. **Synthetic scenario data:** persona, balances, limits, statement/due days, bonus progress, purchases, service qualification, and optimization intents.
+
+Public product facts are paraphrased from official issuer pages; they are not endorsements or complete legal card agreements. Every simplification required by the engine is recorded beside the product. No real cardholder data, credentials, card numbers, account details, or transaction histories are stored.
 
 Data depends on `engine.models` for validation. The engine must not import data.
 
@@ -12,8 +30,10 @@ Data depends on `engine.models` for validation. The engine must not import data.
 data/
   IMPLEMENTATION.md
   __init__.py
+  models.py
   loaders.py
   cards.json
+  SOURCES.md
   scenarios/
     sarah_august_2026.json
     eval_probes.json
@@ -21,36 +41,33 @@ data/
   cache/              # gitignored provider cache
 ```
 
-`cards.json` is the complete synthetic catalog. Scenario files reference card IDs and contain purchases plus optional default intents. `loaders.py` resolves references and validates the assembled `Scenario` model.
+`cards.json` contains product definitions and provenance, never account state. Scenario/probe files reference product IDs and supply synthetic account fields. `loaders.py` combines the two into fresh engine `Card` objects.
 
 ## 3. Catalog design
 
-Create 6-8 clearly synthetic cards. Names must not contain actual issuer/product names. Use IDs that remain stable even if display names change.
+The agreed catalog contains:
 
-Recommended catalog roles:
-
-| ID | Role | Behavior to exercise |
+| Product ID | Public product | Engine role |
 |---|---|---|
-| `harbor-rent` | Rent-oriented cash card | Strong rent cashback, moderate limit |
-| `summit-journey` | Travel points card | Travel/dining multipliers, higher point value |
-| `aurora-bonus` | Signup-bonus card | Large remaining threshold and near deadline |
-| `maple-everyday` | Flat cashback | Reliable baseline/runner-up |
-| `cedar-starter` | Low-limit card | Capacity/utilization warnings |
-| `metro-table` | Dining specialist | Category tradeoff |
-| `lakeview-market` | Grocery specialist | Category tradeoff |
-| `northstar-flex` | High-limit low-reward card | Credit-health/headroom option |
+| `rbc-ion-plus` | RBC ION+ Visa | Everyday category points |
+| `rbc-avion-visa-infinite` | RBC Avion Visa Infinite | Travel earn and optimistic static travel value |
+| `td-rewards-visa` | TD Rewards Visa Card | Broad category multipliers with documented caps |
+| `td-aeroplan-visa-infinite` | TD Aeroplan Visa Infinite Card | Airline points with dynamic value simplified to a static assumption |
+| `amex-cobalt` | American Express Cobalt Card | High dining/grocery points value |
+| `amex-gold-rewards` | American Express Gold Rewards Card | Travel/everyday points and Sarah's synthetic bonus account |
+| `scotia-momentum-visa-infinite` | Scotia Momentum Visa Infinite Card | Grocery/recurring cashback with documented annual caps |
+| `rogers-red-world-elite` | Rogers Red World Elite Mastercard | Flat cashback under a synthetic qualifying-service assumption |
 
-Vary:
+Each `ProductDefinition` requires official issuer URLs and rejects non-issuer hosts. It records:
 
-- Limits from roughly `$1,500` to `$15,000`.
-- Current utilization from near zero to roughly 35%.
-- Statement days across the month.
-- Due days that create visibly different float for the scenario dates.
-- Cashback versus point/mile base types.
-- Static point values from `0.8` to `1.5` cents represented in millicents.
-- Bonus presence and deadline.
+- Published annual fee and ordinary earn rates.
+- Reward type and program.
+- Static point valuation plus its official or assumed basis.
+- Volatile public offer summary for provenance only.
+- Engine assumptions.
+- Unmodeled terms such as caps, MCCs, portal qualification, foreign currency, service status, and redemption bonuses.
 
-Do not optimize fixture values to imitate a real issuer. Add a catalog-level note that reward structures are fabricated for demonstration and may be inspired only by common public patterns such as category multipliers.
+Do not put limits, balances, statement days, due days, or bonus progress in `cards.json`.
 
 ## 4. Sarah scenario
 
@@ -59,8 +76,8 @@ Use a fixed future planning month so tests never depend on wall-clock time:
 - `reference_date`: `2026-07-18`.
 - Purchase horizon: August 2026.
 - Mortgage/utilization demo cutoff: `2026-10-18` or another explicit future date supplied in intent.
-- Portfolio: 4 cards selected from the catalog.
-- Purchases: 18-22 items totaling enough to create routing tension without making the default scenario infeasible.
+- Portfolio: RBC Avion Visa Infinite, American Express Gold Rewards, Scotia Momentum Visa Infinite, and Rogers Red World Elite.
+- Purchases: 20 items totaling `$5,890`.
 
 Required purchases:
 
@@ -75,20 +92,21 @@ Required purchases:
 The initial balances and limits must support these two acceptance stories:
 
 1. **Mortgage story:** high credit-health weight plus a 30% per-card ceiling produces a complete plan, keeps every applicable card at/below the ceiling, and still makes visible progress toward the bonus if feasible.
-2. **Travel story:** removing the hard ceiling and prioritizing travel changes at least three assignments and may move rent only when travel/bonus utility justifies it.
+2. **Travel story:** removing the hard ceiling and prioritizing travel changes at least three assignments.
 
 Do not hard-code an expected card for every purchase until scoring defaults are implemented. Once Phase 2 stabilizes, store expected high-level invariants in tests rather than embedding solver output in JSON.
 
 ## 5. JSON shapes
 
-### Card catalog
+### Product catalog
 
 ```json
 {
   "schema_version": "1.0",
-  "synthetic": true,
-  "attribution": "Fabricated reward structures for demonstration.",
-  "cards": []
+  "document_type": "product_catalog",
+  "verified_on": "2026-07-18",
+  "terms_notice": "Public terms plus documented engine assumptions.",
+  "products": []
 }
 ```
 
@@ -99,14 +117,11 @@ Do not hard-code an expected card for every purchase until scoring defaults are 
   "schema_version": "1.0",
   "id": "sarah-august-2026",
   "name": "Sarah's August plan",
-  "synthetic": true,
+  "document_type": "scenario",
+  "synthetic_persona": true,
+  "persona_label": "Sarah (synthetic)",
   "reference_date": "2026-07-18",
-  "card_ids": [
-    "harbor-rent",
-    "summit-journey",
-    "aurora-bonus",
-    "cedar-starter"
-  ],
+  "accounts": [],
   "purchases": [],
   "demo_intents": {
     "mortgage": {},
@@ -115,19 +130,21 @@ Do not hard-code an expected card for every purchase until scoring defaults are 
 }
 ```
 
-`demo_intents` contains explicit validated intents for offline reliability and testing. It does not pretend to be LLM output. The UI may load one as a manual preset.
+`accounts` contains only synthetic account state and may attach an explicitly synthetic one-stage bonus. `demo_intents` contains explicit validated presets for offline reliability; neither pretends to be LLM output or real user data.
 
 ## 6. Loader contract
 
 Public functions:
 
 ```python
-def load_card_catalog(path: Path | None = None) -> list[Card]: ...
+def load_product_catalog(path: Path | None = None) -> ProductCatalog: ...
+
+def load_card_catalog(path: Path | None = None) -> list[ProductDefinition]: ...
 
 def load_scenario(
     scenario_id: str = "sarah-august-2026",
     data_root: Path | None = None,
-) -> Scenario: ...
+) -> LoadedScenario: ...
 
 def list_scenarios(data_root: Path | None = None) -> list[ScenarioMetadata]: ...
 ```
@@ -136,11 +153,11 @@ Implementation rules:
 
 1. Resolve default paths relative to `loaders.py`, never current working directory.
 2. Read UTF-8 with Python's JSON parser.
-3. Reject duplicate catalog card IDs before building a lookup.
+3. Reject duplicate product IDs and non-official source hosts.
 4. Reject missing or duplicate scenario card references.
 5. Reject duplicate purchase IDs.
-6. Validate every object through Pydantic.
-7. Return fresh model instances/lists; callers may safely copy/update without contaminating later requests.
+6. Validate public product and synthetic account objects through separate Pydantic contracts.
+7. Return fresh models; scenario mutation cannot contaminate catalog definitions or later loads.
 8. Raise a typed `DataLoadError` containing path and stable reason code for malformed repository data. API startup health translates it; do not expose a raw stack trace to UI.
 
 No loader performs scoring or silently repairs invalid values.
@@ -155,7 +172,7 @@ No loader performs scoring or silently repairs invalid values.
 - Dining: specialist points versus cashflow timing.
 - Large one-off: capacity/risk versus reward.
 
-Each probe contains cards (or card IDs), one purchase, and no gold answer. During evaluation the engine derives the gold recommendation from the gold intent, preventing stale hand-labeled cards.
+Each probe contains sourced product IDs, synthetic account states, one synthetic purchase, and no gold card answer. During evaluation the engine derives the gold recommendation from the gold intent, preventing stale hand labels.
 
 Avoid a probe where one card dominates every objective; it contributes little information to downstream match.
 
@@ -178,7 +195,7 @@ Provider response caches go under `data/cache/` and must never include authoriza
 ## 9. Validation tests
 
 - Catalog and Sarah scenario load from any working directory.
-- Every object is marked/documented synthetic.
+- Every product has official issuer provenance and every account/person/purchase is marked/documented synthetic.
 - IDs are unique and references resolve.
 - All money/rates/value fields are integers, not booleans or floats.
 - Card days are 1-28.
@@ -202,6 +219,7 @@ Provider response caches go under `data/cache/` and must never include authoriza
 - Catalog includes all planned behavioral roles.
 - Sarah scenario supports both demo narratives without hidden mutation.
 - Loaders resolve paths robustly and validate all cross-references.
-- No real brand, PII, credential, or copied terms appear.
+- Real product names/ordinary terms are sourced and timestamped; no copied long-form terms appear.
+- No real PII, credential, card number, account state, or transaction appears.
 - Tests establish synthetic, integer, and temporal invariants.
 - Generated/cached data locations and manifest rules are documented.

@@ -2,7 +2,7 @@
 
 A hackathon prototype that separates language understanding from financial calculation:
 
-- A deterministic engine recommends a card and allocates a synthetic month of purchases.
+- A deterministic engine recommends a card and allocates a synthetic month of purchases using timestamped public product terms.
 - A small SFT model parses natural-language goals into validated preferences and constraints.
 - A template layer explains actual solver output.
 - FastAPI and Streamlit provide the demo workflow.
@@ -23,7 +23,7 @@ No real accounts, credentials, personally identifying information, or money move
 | Module | Responsibility |
 |---|---|
 | `engine` | Domain models, integer scoring, constraints, optimization, and what-if |
-| `data` | Validated synthetic card and purchase scenarios |
+| `data` | Official product references plus validated synthetic accounts, purchases, and probes |
 | `intent` | LLM provider boundary, output validation, SFT data generation |
 | `explain` | Structured templates derived from engine facts |
 | `api` | FastAPI schemas and orchestration |
@@ -43,14 +43,16 @@ py -m venv .venv
 
 ## Current implementation
 
-The deterministic engine is implemented through the greedy monthly-allocation milestone: shared contracts, fixed-point weights, scoring, feasibility, exact single-purchase recommendation, aggregate plan evaluation, bounded repair/local search, and final-state alternatives. Exact ILP, sampled strategies, what-if, synthetic scenario files, parser/eval adapters, explanations, API, and UI remain pending.
+The deterministic engine module is complete: shared contracts, fixed-point weights, scoring, feasibility, exact single-purchase recommendation, greedy repair/local search, exact all-binary PuLP/CBC allocation with brute-force parity checks, sampled strategy frontier, reoptimized what-if, and final-state alternatives. The sourced eight-product catalog, synthetic Sarah scenario, and five eval probes are also implemented. Parser/eval adapters, explanation templates, API, and UI remain pending.
+
+Normal CBC requests run in an isolated process with a configurable hard wall limit of at most 60 seconds. A timeout or native solver failure returns a verified, explicitly labeled heuristic fallback instead of hanging the caller.
 
 Validate the current module:
 
 ```powershell
 uv sync --extra dev
-uv run python -m pytest tests/unit/engine -q
-uv run python -m ruff check engine tests/unit/engine
+uv run python -m pytest tests/unit/engine tests/oracle -q
+uv run python -m ruff check engine tests/unit/engine tests/oracle
 ```
 
 The generated Windows `pytest.exe` launcher may be denied in some environments; `uv run python -m pytest` is the verified invocation.
