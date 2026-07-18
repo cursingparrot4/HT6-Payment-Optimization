@@ -1,0 +1,99 @@
+{
+    "schema_version": "1.0",
+    "synthetic": true,
+    "attribution": "Fabricated reward structures for demonstration.",
+    "cards": [
+        {
+            "id": "harbor-rent",
+            "name": "Harbor Rent (synthetic)",
+            "credit_limit_cents": 500_000,
+            "current_balance_cents": 0,
+            "reward_rules": [
+                {
+                    "category": "rent",
+                    "rate_bps": 200,
+                    "reward_type": "cashback"
+                }
+            ],
+            "base_rate_bps": 100,
+            "base_reward_type": "cashback",
+            "point_value_millicents": 0,
+            "annual_fee_cents": 0,
+            "statement_day": 25,
+            "due_day": 20,
+            "signup_bonus": null
+        },
+        {
+            "id": "summit-journey",
+            "name": "Summit Journey (synthetic)",
+            "credit_limit_cents": 1_200_000,
+            "current_balance_cents": 1_500_00,
+            "reward_rules": [
+                {
+                    "category": "travel",
+                    "rate_bps": 300,
+                    "reward_type": "points"
+                },
+                {
+                    "category": "dining",
+                    "rate_bps": 300,
+                    "reward_type": "points"
+                }
+            ],
+            "base_rate_bps": 100,
+            "base_reward_type": "points",
+            "point_value_millicents": 1250,
+            "annual_fee_cents": 9500,
+            "statement_day": 12,
+            "due_day": 7,
+            "signup_bonus": null
+        },
+        {
+            "id": "aurora-bonus",
+            "name": "Aurora Bonus (synthetic)",
+            "credit_limit_cents": 800_000,
+            "current_balance_cents": 5_000_00,
+            "reward_rules": [],
+            "base_rate_bps": 150,
+            "base_reward_type": "cashback",
+            "point_value_millicents": 0,
+            "annual_fee_cents": 0,
+            "statement_day": 5,
+            "due_day": 1,
+            "signup_bonus": {
+                "spend_required_cents": 4_000_00,
+                "spend_so_far_cents": 2_500_00,
+                "reward_value_cents": 500_00,
+                "deadline_date": "2026-08-31"
+            }
+        },
+        {
+            "id": "maple-everyday",
+            "name": "Maple Everyday (synthetic)",
+            "credit_limit_cents": 1_000_000,
+            "current_balance_cents": 25_000,
+            "reward_rules": [],
+            "base_rate_bps": 200,
+            "base_reward_type": "cashback",
+            "point_value_millicents": 0,
+            "annual_fee_cents": 0,
+            "statement_day": 15,
+            "due_day": 10,
+            "signup_bonus": null
+        },
+        {
+            "id": "cedar-starter",
+            "name": "Cedar Starter (synthetic)",
+            "credit_limit_cents": 200_000,
+            "current_balance_cents": 1_800_00,
+            "reward_rules": [],
+            "base_rate_bps": 100,
+            "base_reward_type": "cashback",
+            "point_value_millicents": 0,
+            "annual_fee_cents": 0,
+            "statement_day": 20,
+            "due_day": 15,
+            "signup_bonus": null
+        }
+    ]
+}

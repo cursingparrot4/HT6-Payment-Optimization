@@ -1,0 +1,90 @@
+{
+    "schema_version": "1.0",
+    "id": "sarah-august-2026",
+    "name": "Sarah's August plan",
+    "synthetic": true,
+    "reference_date": "2026-07-18",
+    "card_ids": [
+        "harbor-rent",
+        "summit-journey",
+        "aurora-bonus",
+        "cedar-starter"
+    ],
+    "purchases": [
+        {
+            "id": "rent-2026-08",
+            "amount_cents": 220000,
+            "category": "rent",
+            "date": "2026-08-01",
+            "is_recurring": true,
+            "locked_card_id": null
+        },
+        {
+            "id": "groceries-2026-08-05",
+            "amount_cents": 12500,
+            "category": "groceries",
+            "date": "2026-08-05",
+            "is_recurring": false,
+            "locked_card_id": null
+        },
+        {
+            "id": "dining-2026-08-10",
+            "amount_cents": 8500,
+            "category": "dining",
+            "date": "2026-08-10",
+            "is_recurring": false,
+            "locked_card_id": null
+        },
+        {
+            "id": "travel-flight-2026-08-15",
+            "amount_cents": 45000,
+            "category": "travel",
+            "date": "2026-08-15",
+            "is_recurring": false,
+            "locked_card_id": null
+        },
+        {
+            "id": "utilities-2026-08-20",
+            "amount_cents": 15000,
+            "category": "utilities",
+            "date": "2026-08-20",
+            "is_recurring": true,
+            "locked_card_id": null
+        },
+        {
+            "id": "misc-large-2026-08-25",
+            "amount_cents": 35000,
+            "category": "other",
+            "date": "2026-08-25",
+            "is_recurring": false,
+            "locked_card_id": null
+        }
+    ],
+    "demo_intents": {
+        "mortgage": {
+            "weights": {
+                "max_cashback": 0.1,
+                "max_travel": 0.1,
+                "credit_health": 0.6,
+                "hit_signup_bonus": 0.1,
+                "max_cashflow": 0.05,
+                "min_risk": 0.05
+            },
+            "constraints": {
+                "max_utilization_bps": 3000,
+                "max_utilization_until": "2026-10-18"
+            }
+        },
+        "travel": {
+            "weights": {
+                "max_cashback": 0.1,
+                "max_travel": 0.6,
+                "credit_health": 0.1,
+                "hit_signup_bonus": 0.1,
+                "max_cashflow": 0.05,
+                "min_risk": 0.05
+            },
+            "constraints": {}
+        }
+    }
+}
