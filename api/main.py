@@ -24,6 +24,7 @@ from api.recommender import (
     rank_cards,
 )
 from api.seed import seed_demo
+from data.loaders import DataLoadError, load_product_catalog
 from engine.config import DEFAULT_ENGINE_CONFIG, engine_config_hash
 from engine.models import (
     Card as EngineCard,
@@ -328,9 +329,20 @@ def health() -> dict[str, Any]:
             "ready": True,
             "config_version": DEFAULT_ENGINE_CONFIG.config_version,
             "config_hash": engine_config_hash(DEFAULT_ENGINE_CONFIG),
-            "solvers": {"single_purchase": True, "greedy": True, "ilp": False},
+            "solvers": {"single_purchase": True, "greedy": True, "ilp": True},
         },
     }
+
+
+@app.get("/api/catalog")
+def product_catalog() -> ApiResponse:
+    """Sourced public card-product terms from data/cards.json (no account data)."""
+
+    try:
+        catalog = load_product_catalog()
+    except DataLoadError as exc:
+        raise HTTPException(500, f"Product catalog failed to load: {exc}") from exc
+    return _api_response({"catalog": catalog.model_dump(mode="json")})
 
 
 @app.get("/api/demo-scenario")
@@ -385,15 +397,7 @@ def recommend(body: RecommendBody) -> ApiResponse:
 
 @app.post("/api/allocate")
 def allocate(body: AllocateBody) -> ApiResponse:
-    warnings: list[ApiWarning] = []
-    method = SolverMethod.GREEDY
-    if body.solver_preference == "ilp":
-        warnings.append(
-            ApiWarning(
-                code="solver_fallback",
-                message="ILP is not implemented in this backend build; used greedy allocation.",
-            )
-        )
+    method = SolverMethod.ILP if body.solver_preference == "ilp" else SolverMethod.GREEDY
     result = allocate_month(
         body.cards,
         body.purchases,
@@ -401,6 +405,8 @@ def allocate(body: AllocateBody) -> ApiResponse:
         method=method,
         config=DEFAULT_ENGINE_CONFIG,
     )
+    # CBC timeout/failure is handled inside the engine: the result comes back
+    # honestly labeled heuristic_fallback rather than raising here.
     return _api_response(
         {
             "result": result.model_dump(mode="json"),
@@ -408,8 +414,7 @@ def allocate(body: AllocateBody) -> ApiResponse:
                 "version": DEFAULT_ENGINE_CONFIG.config_version,
                 "hash": engine_config_hash(DEFAULT_ENGINE_CONFIG),
             },
-        },
-        warnings,
+        }
     )
 
 
