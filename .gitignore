@@ -19,3 +19,9 @@ eval/reports/*.json
 .vscode/
 .DS_Store
 Thumbs.db
+
+# SwitchPay runtime artifacts
+data/switchpay.db
+ui/web/node_modules/
+ui/web/.next/
+ui/web/next-env.d.ts

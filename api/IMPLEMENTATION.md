@@ -1,5 +1,19 @@
 # FastAPI Implementation Guide
 
+> **Status (2026-07-18):** the shipped backend in this directory implements the SwitchPay
+> product (see the repo README): `db.py` (SQLite), `recommender.py` (card ranking +
+> priority plan + templated explanations over `engine.scoring`), `state_machine.py`
+> (payment lifecycle), `seed.py`, and `main.py` (all routes). From this guide's endpoint
+> plan, `GET /api/health`, `GET /api/demo-scenario`, `POST /api/recommend`, and
+> `POST /api/allocate` (greedy only) are implemented with the versioned `ApiResponse`
+> envelope; `/parse-intent`, `/frontier`, and `/what-if` are not. The SwitchPay CRUD and
+> payment-lifecycle endpoints predate the envelope and return plain JSON consumed by
+> `ui/web`. Browser CORS **is** enabled for `localhost:3000` because the shipped UI is a
+> Next.js browser client, not Streamlit (§11 below reflects the original plan). The
+> planned `settings.py`/`schemas.py`/`dependencies.py`/`services.py`/`errors.py` split was
+> not adopted at hackathon scale. The rest of this guide is kept as the design reference
+> for the remaining endpoints.
+
 ## 1. Mission and boundary
 
 The API is a thin orchestration and serialization layer. It validates request shape, selects configured providers/solvers, calls the deterministic engine, asks the explanation layer to structure the result, and returns versioned JSON.
