@@ -149,6 +149,26 @@ export const savePaymentPriorities = (paymentIds: string[]): Promise<Payment[]> 
     body: JSON.stringify({ payment_ids: paymentIds }),
   });
 
+// Public issuer product terms from data/cards.json — no account data.
+export interface CatalogProduct {
+  id: string;
+  name: string;
+  issuer: string;
+  network: string;
+  reward_program: string;
+  annual_fee_cents: number;
+  reward_rules: { category: string; rate_bps: number; reward_type: string }[];
+  base_rate_bps: number;
+  base_reward_type: "cashback" | "points" | "miles";
+  point_value_millicents: number;
+  point_value_basis: string;
+}
+
+export const fetchCatalog = async (): Promise<CatalogProduct[]> => {
+  const res = await api<{ data: { catalog: { products: CatalogProduct[] } } }>("/catalog");
+  return res.data.catalog.products;
+};
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     cache: "no-store",

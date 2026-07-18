@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { Card, api, money, moneyShort, pct } from "@/lib/api";
+import { Card, CatalogProduct, api, fetchCatalog, money, moneyShort, pct } from "@/lib/api";
 import {
   Badge,
   EmptyState,
@@ -15,6 +15,7 @@ interface CardFormState {
   name: string;
   reward_type: "cashback" | "points";
   reward_rate: string; // percent for cashback, points-per-dollar for points
+  point_value_millicents: string; // value of one point, in millicents (1000 = 1¢)
   credit_limit: string;
   current_balance: string;
   bonus_target: string;
@@ -29,6 +30,7 @@ const EMPTY_FORM: CardFormState = {
   name: "",
   reward_type: "cashback",
   reward_rate: "1.5",
+  point_value_millicents: "1000",
   credit_limit: "5000",
   current_balance: "0",
   bonus_target: "",
@@ -43,10 +45,8 @@ function toForm(card: Card): CardFormState {
   return {
     name: card.name,
     reward_type: card.reward_type,
-    reward_rate:
-      card.reward_type === "cashback"
-        ? String(card.reward_rate_bps / 100)
-        : String(card.reward_rate_bps / 100),
+    reward_rate: String(card.reward_rate_bps / 100),
+    point_value_millicents: String(card.point_value_millicents || 1000),
     credit_limit: String(card.credit_limit_cents / 100),
     current_balance: String(card.current_balance_cents / 100),
     bonus_target: card.bonus_target_cents ? String(card.bonus_target_cents / 100) : "",
@@ -64,7 +64,7 @@ function toBody(form: CardFormState) {
     name: form.name,
     reward_type: form.reward_type,
     reward_rate_bps: Math.round(parseFloat(form.reward_rate || "0") * 100),
-    point_value_millicents: 1000,
+    point_value_millicents: Math.round(parseFloat(form.point_value_millicents || "1000")),
     credit_limit_cents: cents(form.credit_limit),
     current_balance_cents: cents(form.current_balance),
     bonus_target_cents: form.bonus_target ? cents(form.bonus_target) : null,
@@ -84,6 +84,8 @@ export default function CardsPage() {
   const [form, setForm] = useState<CardFormState>(EMPTY_FORM);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [catalog, setCatalog] = useState<CatalogProduct[]>([]);
+  const [productId, setProductId] = useState("");
 
   const load = useCallback(async () => {
     setCards(await api<Card[]>("/cards"));
@@ -91,13 +93,29 @@ export default function CardsPage() {
 
   useEffect(() => {
     load();
+    // The sourced product catalog is optional — the blank form works without it.
+    fetchCatalog().then(setCatalog).catch(() => setCatalog([]));
   }, [load]);
 
   const openAdd = () => {
     setEditing(null);
     setForm(EMPTY_FORM);
+    setProductId("");
     setError(null);
     setOpen(true);
+  };
+
+  const applyProduct = (id: string) => {
+    setProductId(id);
+    const product = catalog.find((p) => p.id === id);
+    if (!product) return;
+    setForm((f) => ({
+      ...f,
+      name: product.name,
+      reward_type: product.base_reward_type === "cashback" ? "cashback" : "points",
+      reward_rate: String(product.base_rate_bps / 100),
+      point_value_millicents: String(product.point_value_millicents),
+    }));
   };
   const openEdit = (card: Card) => {
     setEditing(card);
@@ -229,6 +247,30 @@ export default function CardsPage() {
         onClose={() => setOpen(false)}
       >
         <form onSubmit={submit} className="space-y-4">
+          {!editing && catalog.length > 0 && (
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-3">
+              <label className="label">Start from a real product (optional)</label>
+              <select
+                className="field"
+                value={productId}
+                onChange={(e) => applyProduct(e.target.value)}
+              >
+                <option value="">Blank card — enter terms manually</option>
+                {catalog.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} — {p.base_reward_type === "cashback" ? "cashback" : "points"},{" "}
+                    ${(p.annual_fee_cents / 100).toFixed(0)} fee
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+                Pre-fills the issuer&apos;s public base earn rate and point valuation from the
+                sourced catalog. Category bonus rates aren&apos;t modeled in the wallet yet.
+                Limits, balances, and welcome-bonus progress are yours to set — they stay
+                synthetic.
+              </p>
+            </div>
+          )}
           <div>
             <label className="label">Card name</label>
             <input
@@ -248,8 +290,13 @@ export default function CardsPage() {
                 onChange={(e) => set({ reward_type: e.target.value as "cashback" | "points" })}
               >
                 <option value="cashback">Cashback</option>
-                <option value="points">Points (1pt = 1¢)</option>
+                <option value="points">Points</option>
               </select>
+              {form.reward_type === "points" && (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  1 pt = {(parseFloat(form.point_value_millicents || "1000") / 1000).toFixed(2)}¢
+                </p>
+              )}
             </div>
             <div>
               <label className="label">
