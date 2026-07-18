@@ -1,5 +1,21 @@
 # Explanation Layer Implementation Guide
 
+## Implementation status
+
+Implemented and validated:
+
+- Strict renderer-agnostic Pydantic models for lines, alternatives, decision cards, card summaries, failures, allocations, sampled strategies, and what-if results.
+- Integer-only currency, basis-point, day, count, and utility formatting.
+- Exact single-purchase winner/runner-up and excluded-card explanations.
+- Monthly plan summaries, per-card slacks, per-purchase final-state alternatives, highlighted rent/large purchases, and exact/heuristic/fallback disclosures.
+- Partial signup progress versus newly earned bonus wording and static point-value warnings.
+- Sampled-frontier raw metrics, deterministic reference tradeoffs, partial/empty outcomes, and incompleteness disclosure.
+- Reoptimized what-if deltas, moved assignments, and correctly attributed base/override failures.
+- Contract mismatch detection for missing IDs, improving alternatives in optimal plans, and inconsistent traces.
+- AST enforcement that explanation code imports no scoring, objective, feasibility, recommendation, greedy, ILP, frontier, what-if, or optimizer module.
+
+Current focused gate: `uv run python -m pytest tests/unit/explain -q` and `uv run python -m ruff check explain tests/unit/explain`.
+
 ## 1. Mission and boundary
 
 The explanation layer turns engine facts into structured, faithful decision cards. It helps a user understand what was selected, which measurable factors mattered, why the strongest alternative lost or was infeasible, which constraints bind, and whether the result is exact or heuristic.
@@ -68,7 +84,7 @@ Use Pydantic models with stable enums.
 - `label`: short machine-stable label.
 - `text`: complete display text.
 - `raw_value: int | None`.
-- `unit`: `cents`, `bps`, `days`, `points`, `boolean`, or null.
+- `unit`: `cents`, `bps`, `days`, `points`, `count`, `boolean`, or null.
 - `source_path`: field path in engine output, for example `metrics.travel_value_cents`.
 - `goal: Goal | None`.
 
@@ -109,7 +125,7 @@ Formatting is deterministic and locale-fixed for the demo:
 - Basis points: `18.25%`; use quotient/remainder or `Decimal`.
 - Days: `1 day` or `42 days`.
 - Internal utility: integer plus label such as `2,275,000 utility points`, never `$`.
-- Card/purchase names come from validated synthetic models and are escaped by the renderer.
+- Card names come from validated public product references; purchase labels come from synthetic scenario IDs. Escaping remains the renderer's responsibility.
 
 Use ASCII source strings. The UI may pair lines with icons/colors based on `tone`; do not embed checkmark/warning glyphs in the text contract.
 
@@ -217,6 +233,8 @@ For each point, describe exact tradeoffs against a designated balanced/reference
 
 Do not say "the Pareto frontier is complete."
 
+If every sampled solve fails, return a valid explanation with zero points, the sampled issues/warnings, and the same incompleteness disclosure. This is a domain outcome, not an explanation-layer exception.
+
 ## 10. What-if explanations
 
 State that the override locks one purchase to another card and reoptimizes the rest of the plan. Show signed deltas for projected reward, max utilization, bonus progress/earned value, cashflow, and utility. Name other purchases that moved if the engine result provides assignment diffs.
@@ -257,7 +275,7 @@ Forbidden wording:
 - Frontier disclosure includes attempted grid size and incompleteness.
 - Equal input produces identical output/order.
 
-Use small hand-built engine result fixtures. Add one integration test using real engine output, but keep most template tests independent of solver details.
+Use small hand-built engine result fixtures plus real recommendation/Sarah greedy output. Frontier and what-if builders receive no card/purchase lookup under their public signatures, so they humanize stable IDs rather than pretending to know display names.
 
 ## 13. Completion checklist
 
