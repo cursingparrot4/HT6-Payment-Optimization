@@ -1,9 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useState } from "react";
 import { Badge, ProgressBar, utilizationTone } from "@/components/ui";
-import { DashboardData, api, money, moneyShort, pct, savePaymentPriorities } from "@/lib/api";
+import {
+  DashboardData,
+  IntentProviderName,
+  ParsedIntent,
+  ParseIntentResult,
+  api,
+  money,
+  moneyShort,
+  parseIntent,
+  pct,
+  savePaymentPriorities,
+} from "@/lib/api";
 
 const ALERT_TONES: Record<string, "teal" | "amber" | "rose" | "sky"> = {
   switch: "teal",
@@ -14,6 +25,19 @@ const ALERT_TONES: Record<string, "teal" | "amber" | "rose" | "sky"> = {
 };
 
 type DashboardPayment = DashboardData["payments"][number];
+type GoalKey = keyof ParsedIntent["weights"];
+
+const GOAL_LABELS: Record<GoalKey, string> = {
+  max_cashback: "Cashback",
+  max_travel: "Travel",
+  credit_health: "Credit health",
+  hit_signup_bonus: "Bonus",
+  max_cashflow: "Cashflow",
+  min_risk: "Headroom",
+};
+
+const DEFAULT_GOAL_TEXT =
+  "I'm applying for a mortgage soon, so keep utilization low, but I still want to hit my bonus.";
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -23,6 +47,11 @@ export default function DashboardPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [prioritySaving, setPrioritySaving] = useState(false);
   const [priorityMessage, setPriorityMessage] = useState<string | null>(null);
+  const [goalText, setGoalText] = useState(DEFAULT_GOAL_TEXT);
+  const [intentResult, setIntentResult] = useState<ParseIntentResult | null>(null);
+  const [intentLoading, setIntentLoading] = useState(false);
+  const [intentError, setIntentError] = useState<string | null>(null);
+  const [intentProvider, setIntentProvider] = useState<IntentProviderName>("auto");
 
   const load = useCallback(async () => {
     try {
@@ -98,6 +127,33 @@ export default function DashboardPage() {
       await load();
     } finally {
       setSeeding(false);
+    }
+  };
+
+  const parseGoal = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!data) return;
+    setIntentLoading(true);
+    setIntentError(null);
+    try {
+      const result = await parseIntent({
+        text: goalText,
+        reference_date: new Date().toISOString().slice(0, 10),
+        card_context: data.cards.map((card) => ({
+          id: card.id,
+          name: card.name,
+          has_active_bonus:
+            Boolean(card.bonus_target_cents && card.bonus_deadline) &&
+            (card.bonus_progress_cents ?? 0) < (card.bonus_target_cents ?? 0),
+        })),
+        allow_fallback: true,
+        provider: intentProvider,
+      });
+      setIntentResult(result);
+    } catch (e) {
+      setIntentError((e as Error).message);
+    } finally {
+      setIntentLoading(false);
     }
   };
 
@@ -189,6 +245,17 @@ export default function DashboardPage() {
         />
       </section>
 
+      <GoalParserPanel
+        text={goalText}
+        result={intentResult}
+        loading={intentLoading}
+        error={intentError}
+        provider={intentProvider}
+        onText={setGoalText}
+        onProvider={setIntentProvider}
+        onSubmit={parseGoal}
+      />
+
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="panel overflow-hidden p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1">
@@ -258,6 +325,138 @@ export default function DashboardPage() {
           <CardsPanel cards={data.cards} />
         </div>
       </section>
+    </div>
+  );
+}
+
+function GoalParserPanel({
+  text,
+  result,
+  loading,
+  error,
+  provider,
+  onText,
+  onProvider,
+  onSubmit,
+}: {
+  text: string;
+  result: ParseIntentResult | null;
+  loading: boolean;
+  error: string | null;
+  provider: IntentProviderName;
+  onText: (text: string) => void;
+  onProvider: (provider: IntentProviderName) => void;
+  onSubmit: (event: FormEvent) => void;
+}) {
+  const intent = result?.intent;
+  const sourceTone =
+    result?.source === "gemini"
+      ? "green"
+      : result?.source === "freesolo"
+        ? "sky"
+      : result?.source === "fallback"
+        ? "amber"
+        : "teal";
+
+  return (
+    <section className="panel grid gap-4 p-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(360px,1fr)]">
+      <form onSubmit={onSubmit} className="space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="text-base font-semibold text-[#202332]">Goal parser</h2>
+          <Badge tone="slate">language to weights</Badge>
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-medium text-[#73798a]">Provider</label>
+          <select
+            className="w-full rounded-[14px] border border-[#dde2eb] bg-white px-3 py-2 text-sm font-medium text-[#202332] outline-none transition focus:border-[#465bd8]"
+            value={provider}
+            onChange={(event) => onProvider(event.target.value as IntentProviderName)}
+          >
+            <option value="auto">Auto</option>
+            <option value="freesolo">Freesolo trained model</option>
+            <option value="gemini">Gemini prompted model</option>
+            <option value="fixture">Local fixture</option>
+          </select>
+        </div>
+        <textarea
+          className="min-h-[104px] w-full resize-none rounded-[18px] border border-[#dde2eb] bg-[#f7f8fb] px-4 py-3 text-sm leading-6 text-[#202332] outline-none transition focus:border-[#465bd8] focus:bg-white"
+          value={text}
+          onChange={(event) => onText(event.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="submit"
+            disabled={loading || text.trim().length === 0}
+            className="inline-flex items-center justify-center rounded-[16px] bg-[#465bd8] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#3849b7] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {loading ? "Parsing..." : "Parse goal"}
+          </button>
+          {result ? <Badge tone={sourceTone}>{result.source}</Badge> : null}
+          {result?.used_fallback ? <Badge tone="amber">fallback</Badge> : null}
+          {error ? <span className="text-xs font-medium text-rose-700">{error}</span> : null}
+        </div>
+      </form>
+
+      <div className="rounded-[22px] border border-[#dde2eb] bg-white p-4">
+        {intent ? (
+          <div className="space-y-4">
+            <div>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-medium text-[#73798a]">Optimizer weights</p>
+                <p className="text-xs text-[#9aa1b2]">
+                  {result?.valid_model_output ? "validated" : "fallback settings"}
+                </p>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {(Object.keys(GOAL_LABELS) as GoalKey[]).map((goal) => (
+                  <IntentWeight key={goal} label={GOAL_LABELS[goal]} value={intent.weights[goal]} />
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {intent.constraints.max_utilization_bps !== null ? (
+                <Badge tone="green">
+                  util {"<="} {pct(intent.constraints.max_utilization_bps)}
+                </Badge>
+              ) : (
+                <Badge tone="slate">no utilization cap</Badge>
+              )}
+              {intent.constraints.max_utilization_until ? (
+                <Badge tone="sky">until {intent.constraints.max_utilization_until}</Badge>
+              ) : null}
+              {intent.constraints.must_hit_bonus_card_ids.map((cardId) => (
+                <Badge key={cardId} tone="amber">
+                  must hit {cardId}
+                </Badge>
+              ))}
+            </div>
+
+            {result?.warnings.length ? (
+              <p className="text-xs leading-5 text-[#73798a]">
+                {result.warnings.map((warning) => warning.message).join(" ")}
+              </p>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex h-full min-h-[150px] items-center justify-center rounded-[18px] bg-[#f7f8fb] px-5 text-center text-sm leading-6 text-[#73798a]">
+            Type a goal to see the exact Intent JSON shape the optimizer will use.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function IntentWeight({ label, value }: { label: string; value: number }) {
+  const percent = Math.round(value * 100);
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+        <span className="font-medium text-[#555d70]">{label}</span>
+        <span className="tabular text-[#73798a]">{percent}%</span>
+      </div>
+      <ProgressBar value={percent} tone={percent >= 35 ? "emerald" : "teal"} />
     </div>
   );
 }

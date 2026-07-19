@@ -42,6 +42,9 @@ from engine.models import (
     SolverMethod,
 )
 from engine.optimize import allocate_month, recommend_purchase
+from intent.models import IntentCardContext
+from intent.parser import parse_intent
+from intent.providers import FixtureIntentProvider, FreesoloIntentProvider, GeminiIntentProvider
 
 
 def create_app() -> FastAPI:
@@ -135,6 +138,14 @@ class AllocateBody(BaseModel):
     solver_preference: Literal["greedy", "ilp"] = "greedy"
 
 
+class ParseIntentBody(BaseModel):
+    text: str = Field(min_length=1, max_length=2_000)
+    reference_date: date = Field(default_factory=date.today)
+    card_context: list[IntentCardContext] = Field(default_factory=list, max_length=8)
+    allow_fallback: bool = True
+    provider: Literal["auto", "freesolo", "gemini", "fixture"] = "auto"
+
+
 def _api_response(data: dict[str, Any], warnings: list[ApiWarning] | None = None) -> ApiResponse:
     return ApiResponse(data=data, warnings=warnings or [])
 
@@ -225,6 +236,16 @@ def _recommendation_for(
     ranking["switch"] = build_switch_recommendation(ranking, payment)
     ranking["payment"] = _payment_with_names(conn, payment)
     return ranking
+
+
+def _intent_provider(name: str):
+    if name == "freesolo":
+        return FreesoloIntentProvider()
+    if name == "gemini":
+        return GeminiIntentProvider()
+    if name == "fixture":
+        return FixtureIntentProvider()
+    return None
 
 
 def _get_script(scenario: str) -> list[sm.Step]:
@@ -416,6 +437,18 @@ def allocate(body: AllocateBody) -> ApiResponse:
             },
         }
     )
+
+
+@app.post("/api/parse-intent")
+async def parse_intent_endpoint(body: ParseIntentBody) -> ApiResponse:
+    result = await parse_intent(
+        body.text,
+        body.reference_date,
+        tuple(body.card_context),
+        provider=_intent_provider(body.provider),
+        allow_fallback=body.allow_fallback,
+    )
+    return _api_response({"result": result.model_dump(mode="json")})
 
 
 @app.post("/api/seed")

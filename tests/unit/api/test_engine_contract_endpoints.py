@@ -99,3 +99,40 @@ def test_allocate_endpoint_runs_exact_ilp_when_requested() -> None:
     else:
         assert result["status"] == "heuristic_fallback"
         assert result["solver_method"] == "greedy"
+
+
+def test_parse_intent_endpoint_returns_visible_source_and_intent_contract() -> None:
+    client = TestClient(create_app())
+    response = client.post(
+        "/api/parse-intent",
+        json={
+            "text": (
+                "I'm applying for a mortgage soon, so keep utilization low, "
+                "but I still want to hit my bonus."
+            ),
+            "reference_date": TODAY.isoformat(),
+            "provider": "fixture",
+            "card_context": [
+                {
+                    "id": "amex-gold-rewards",
+                    "name": "American Express Gold Rewards",
+                    "has_active_bonus": True,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    result = body["data"]["result"]
+    assert result["source"] == "fixture"
+    assert result["raw_output_available"] is True or result["source"] == "fallback"
+    assert set(result["intent"]["weights"]) == {
+        "max_cashback",
+        "max_travel",
+        "credit_health",
+        "hit_signup_bonus",
+        "max_cashflow",
+        "min_risk",
+    }
+    assert result["intent"]["weights"]["credit_health"] >= 0

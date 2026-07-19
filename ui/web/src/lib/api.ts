@@ -143,11 +143,56 @@ export interface DashboardData {
   };
 }
 
+export interface IntentWeights {
+  max_cashback: number;
+  max_travel: number;
+  credit_health: number;
+  hit_signup_bonus: number;
+  max_cashflow: number;
+  min_risk: number;
+}
+
+export interface ParsedIntent {
+  weights: IntentWeights;
+  constraints: {
+    max_utilization_bps: number | null;
+    max_utilization_until: string | null;
+    must_hit_bonus_card_ids: string[];
+  };
+}
+
+export interface ParseIntentResult {
+  intent: ParsedIntent | null;
+  source: "freesolo" | "gemini" | "prompted" | "fixture" | "fallback";
+  provider_name: string | null;
+  model_id: string | null;
+  used_fallback: boolean;
+  valid_model_output: boolean;
+  warnings: { code: string; message: string }[];
+  raw_output_available: boolean;
+}
+
+export type IntentProviderName = "auto" | "freesolo" | "gemini" | "fixture";
+
 export const savePaymentPriorities = (paymentIds: string[]): Promise<Payment[]> =>
   api<Payment[]>("/payment-priorities", {
     method: "PUT",
     body: JSON.stringify({ payment_ids: paymentIds }),
   });
+
+export const parseIntent = async (body: {
+  text: string;
+  reference_date: string;
+  card_context: { id: string; name: string; has_active_bonus: boolean }[];
+  allow_fallback?: boolean;
+  provider?: IntentProviderName;
+}): Promise<ParseIntentResult> => {
+  const res = await api<{ data: { result: ParseIntentResult } }>("/parse-intent", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return res.data.result;
+};
 
 // Public issuer product terms from data/cards.json — no account data.
 export interface CatalogProduct {
