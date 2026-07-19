@@ -472,33 +472,6 @@ uv run python -m pytest tests/unit/intent -q                  # includes AST bou
 
 ---
 
-## Honest status and limitations
-
-**Fully implemented and tested:** the deterministic engine (all solvers), the sourced catalog
-and Sarah scenario, the explanation layer, the intent provider boundary with validation and
-fallback, the FastAPI backend (both surfaces), and the Next.js UI including the Optimizer page.
-
-**Implemented but not measured:** `eval/` is complete in code but has no unit tests and cannot
-produce a real report without model credentials. The SFT dataset under
-`intent/training/freesolo/` currently holds **240 train / 120 eval fixture rows** — the module's
-own rule is that production claims require 800–2,000 accepted records, so **these are fixture
-datasets and we make no trained-model performance claim.**
-
-**Blocked on external access:** the measured Freesolo SFT run, general-model paraphrase
-generation at real scale, and the frozen trained-vs-base-vs-big comparison. These are gated on
-credentials, not on unwritten code.
-
-**Deliberately out of scope:** real payment rails, statement ledgers, interest charges, award
-availability, and credit-score modeling. The engine documents every simplification it makes
-against the sourced product terms.
-
-**Two known documentation drifts:** `.env.example` lists `INTENT_PROVIDER`, but the code reads
-`CARDIQ_INTENT_PROVIDER`. CardIQ's own recommendation explanations remain templated inside
-`api/recommender.py`, separate from the engine's `explain/` layer — two explanation paths, by
-history rather than design.
-
----
-
 ## Repository guide
 
 | Document | Purpose |
