@@ -79,12 +79,12 @@ No real accounts, credentials, personally identifying information, or money move
 |---|---|---|
 | `engine` | Domain models, integer scoring, constraints, optimization, and what-if | Complete: greedy, exact PuLP/CBC ILP, sampled strategy frontier, what-if |
 | `data` | Official product references plus validated synthetic accounts, purchases, and probes | Implemented: sourced 8-card catalog (`data/cards.json`), loaders, Sarah scenario, eval probes; also holds SwitchPay's runtime SQLite (`data/switchpay.db`, gitignored) |
-| `intent` | LLM provider boundary, output validation, SFT data generation | Pending (guide only) |
-| `explain` | Structured templates derived from engine facts | Pending (guide only) |
-| `api` | FastAPI orchestration: SwitchPay product endpoints plus engine `/api/recommend`, `/api/allocate`, `/api/demo-scenario` | Implemented |
-| `ui` | SwitchPay web app (Next.js + TypeScript + Tailwind, in `ui/web`); the original guide planned Streamlit | Implemented |
-| `eval` | Frozen model comparisons and downstream decision metrics | Pending (guide only) |
-| `tests` | Unit, property, oracle, contract, and end-to-end verification | `tests/unit/engine`, `tests/unit/data`, `tests/unit/api`, `tests/oracle` implemented |
+| `intent` | LLM provider boundary, output validation, normalization, SFT data generation | Implemented and wired: provider protocol, JSON validation, weight normalization, visible fallback, and reverse SFT data generation. Exposed at `POST /api/parse-intent`. External model training/measured eval remain blocked (no Freesolo/general-model credentials) |
+| `explain` | Structured templates derived from engine facts | Implemented and wired: `explain_recommendation`/`explain_allocation`/`explain_frontier`/`explain_what_if` attached to the corresponding engine API responses |
+| `api` | FastAPI orchestration: SwitchPay product endpoints plus engine `/api/parse-intent`, `/api/recommend`, `/api/allocate`, `/api/frontier`, `/api/what-if`, `/api/demo-scenario` | Implemented |
+| `ui` | SwitchPay web app (Next.js + TypeScript + Tailwind, in `ui/web`), including the engine-backed **Optimizer** page; the original guide planned Streamlit | Implemented |
+| `eval` | Frozen model comparisons and downstream decision metrics | Pending (guide only); blocked on external model access |
+| `tests` | Unit, property, oracle, contract, and end-to-end verification | `tests/unit/*`, `tests/oracle`, and `tests/integration` (engine API end-to-end) implemented |
 
 ## Environment
 
@@ -98,19 +98,19 @@ py -m venv .venv
 
 ## Current implementation
 
-The deterministic engine module is complete: shared contracts, fixed-point weights, scoring, feasibility, exact single-purchase recommendation, greedy repair/local search, exact all-binary PuLP/CBC allocation with brute-force parity checks, sampled strategy frontier, reoptimized what-if, and final-state alternatives. The sourced eight-product catalog, synthetic Sarah scenario, five eval probes, and faithful structured explanation layer are also implemented. Parser/eval adapters, API, and UI remain pending.
+The deterministic engine module is complete: shared contracts, fixed-point weights, scoring, feasibility, exact single-purchase recommendation, greedy repair/local search, exact all-binary PuLP/CBC allocation with brute-force parity checks, sampled strategy frontier, reoptimized what-if, and final-state alternatives. The sourced eight-product catalog, synthetic Sarah scenario, five eval probes, and faithful structured explanation layer are also implemented.
 
 Normal CBC requests run in an isolated process with a configurable hard wall limit of at most 60 seconds. A timeout or native solver failure returns a verified, explicitly labeled heuristic fallback instead of hanging the caller.
 
-On top of the engine, the SwitchPay product layer is implemented end to end: the FastAPI backend (`api/`) with card/payment CRUD, priority-aware routing (`PUT /api/payment-priorities`, `build_priority_plan`), switch recommendations, the payment state machine with idempotency and failover, and versioned engine endpoints (`/api/recommend`, `/api/allocate`, `/api/demo-scenario`); and the Next.js UI (`ui/web`).
+On top of the engine, the SwitchPay product layer is implemented end to end: the FastAPI backend (`api/`) with card/payment CRUD, priority-aware routing (`PUT /api/payment-priorities`, `build_priority_plan`), switch recommendations, the payment state machine with idempotency and failover. The engine path from PLAN §11 is now wired through the API and the browser as well: `/api/parse-intent` (intent parsing with visible fallback), `/api/recommend`, `/api/allocate` (greedy or ILP), `/api/frontier`, and `/api/what-if` — each engine result carrying its faithful `explain/` structured explanation — and the Next.js UI (`ui/web`) surfaces them on the **Optimizer** page (goal → weights/constraints → monthly plan with decision cards → sampled strategies → one what-if). `tests/integration/test_engine_endpoints_e2e.py` drives this whole path in-process.
 
-Still pending from the original plan: the intent parser (`intent/`), the templated explanation layer (`explain/`) as a separate module, and model evaluation (`eval/`). SwitchPay's recommendation explanations are currently templated inside `api/recommender.py`.
+Still pending from the original plan: the model-evaluation harness (`eval/`), plus the external, credential-gated steps of the intent track — general-model paraphrase generation, Freesolo SFT, and the frozen trained-vs-base-vs-big measured comparison. The `intent/` provider boundary, validation, normalization, fallback, and reverse SFT-data generation are implemented and unit-tested against fixture providers; only the parts requiring live external model access are blocked. SwitchPay's own recommendation explanations remain templated inside `api/recommender.py` (separate from the engine `explain/` layer).
 
 Validate everything implemented:
 
 ```bash
-.venv/bin/python -m pytest tests/unit tests/oracle -q   # engine + data + SwitchPay layers
-.venv/bin/python -m ruff check api engine data tests/unit tests/oracle
+.venv/bin/python -m pytest tests/unit tests/oracle tests/integration -q   # engine + data + SwitchPay + engine-API e2e
+.venv/bin/python -m ruff check api engine data tests/unit tests/oracle tests/integration
 ```
 
 On Windows with uv: `uv sync --extra dev`, then `uv run python -m pytest tests/unit -q` (the generated `pytest.exe` launcher may be denied in some environments; `uv run python -m pytest` is the verified invocation).

@@ -1,18 +1,24 @@
 # FastAPI Implementation Guide
 
-> **Status (2026-07-18):** the shipped backend in this directory implements the SwitchPay
-> product (see the repo README): `db.py` (SQLite), `recommender.py` (card ranking +
+> **Status (2026-07-18, updated):** the shipped backend in this directory implements the
+> SwitchPay product (see the repo README): `db.py` (SQLite), `recommender.py` (card ranking +
 > priority plan + templated explanations over `engine.scoring`), `state_machine.py`
-> (payment lifecycle), `seed.py`, and `main.py` (all routes). From this guide's endpoint
-> plan, `GET /api/health`, `GET /api/demo-scenario`, `POST /api/recommend`, and
-> `POST /api/allocate` (greedy only) are implemented with the versioned `ApiResponse`
-> envelope; `/parse-intent`, `/frontier`, and `/what-if` are not. The SwitchPay CRUD and
-> payment-lifecycle endpoints predate the envelope and return plain JSON consumed by
-> `ui/web`. Browser CORS **is** enabled for `localhost:3000` because the shipped UI is a
+> (payment lifecycle), `seed.py`, and `main.py` (all routes). **All engine endpoints from
+> this guide's plan are now implemented** with the versioned `ApiResponse` envelope:
+> `GET /api/health`, `GET /api/demo-scenario`, `POST /api/parse-intent`,
+> `POST /api/recommend`, `POST /api/allocate` (greedy **and** ILP via `solver_preference`),
+> `POST /api/frontier`, and `POST /api/what-if`. `/recommend`, `/allocate`, `/frontier`,
+> and `/what-if` attach the `explain/` structured explanation to the engine result;
+> `/parse-intent` runs the real `intent.parse_intent` path and, because no trained provider
+> is configured, returns the visibly-labeled equal-weight fallback (`used_fallback=true`) —
+> the intent provider lives in `main._INTENT_PROVIDER` and is swapped in tests. These
+> endpoints are covered by `tests/integration/test_engine_endpoints_e2e.py`. The SwitchPay
+> CRUD and payment-lifecycle endpoints predate the envelope and return plain JSON consumed
+> by `ui/web`. Browser CORS **is** enabled for `localhost:3000` because the shipped UI is a
 > Next.js browser client, not Streamlit (§11 below reflects the original plan). The
 > planned `settings.py`/`schemas.py`/`dependencies.py`/`services.py`/`errors.py` split was
-> not adopted at hackathon scale. The rest of this guide is kept as the design reference
-> for the remaining endpoints.
+> not adopted at hackathon scale; route handlers in `main.py` call the engine and explain
+> layers directly. The rest of this guide is kept as the design reference.
 
 ## 1. Mission and boundary
 

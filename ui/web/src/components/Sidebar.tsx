@@ -41,12 +41,20 @@ const ICONS: Record<string, JSX.Element> = {
       />
     </svg>
   ),
+  optimize: (
+    <svg viewBox="0 0 20 20" fill="none" className="h-[18px] w-[18px]">
+      <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M10 3v3M10 14v3M3 10h3M14 10h3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <circle cx="10" cy="10" r="2.2" fill="currentColor" />
+    </svg>
+  ),
 };
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: "dashboard" },
   { href: "/cards", label: "Cards", icon: "cards" },
   { href: "/payments", label: "Payments", icon: "payments" },
+  { href: "/optimize", label: "Optimizer", icon: "optimize" },
   { href: "/tracker", label: "Payment Tracker", icon: "tracker" },
 ];
 

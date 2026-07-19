@@ -169,6 +169,297 @@ export const fetchCatalog = async (): Promise<CatalogProduct[]> => {
   return res.data.catalog.products;
 };
 
+// ---------------------------------------------------------------------------
+// Deterministic optimization engine (PLAN.md §11). These endpoints return the
+// weighted multi-objective plan plus faithful, templated explanations — the
+// money math the simpler SwitchPay ranking above does not perform.
+// ---------------------------------------------------------------------------
+
+export type GoalKey =
+  | "max_cashback"
+  | "max_travel"
+  | "credit_health"
+  | "hit_signup_bonus"
+  | "max_cashflow"
+  | "min_risk";
+
+export const GOAL_LABELS: Record<GoalKey, string> = {
+  max_cashback: "Cashback",
+  max_travel: "Travel value",
+  credit_health: "Credit health",
+  hit_signup_bonus: "Signup bonus",
+  max_cashflow: "Cashflow",
+  min_risk: "Low risk",
+};
+
+export const GOAL_ORDER: GoalKey[] = [
+  "max_cashback",
+  "max_travel",
+  "credit_health",
+  "hit_signup_bonus",
+  "max_cashflow",
+  "min_risk",
+];
+
+export interface EngineConstraints {
+  max_utilization_bps: number | null;
+  max_utilization_until: string | null;
+  must_hit_bonus_card_ids: string[];
+}
+
+export interface EngineIntent {
+  weights: Record<GoalKey, number>;
+  constraints: EngineConstraints;
+}
+
+export interface EnginePurchase {
+  id: string;
+  amount_cents: number;
+  category: string;
+  date: string;
+  is_recurring: boolean;
+  locked_card_id: string | null;
+}
+
+// Engine cards carry more fields than we render; pass them through opaquely.
+export interface EngineCard {
+  id: string;
+  name: string;
+  credit_limit_cents: number;
+  current_balance_cents: number;
+  [key: string]: unknown;
+}
+
+export interface EngineScenario {
+  id: string;
+  name: string;
+  reference_date: string;
+  cards: EngineCard[];
+  purchases: EnginePurchase[];
+  intent: EngineIntent;
+}
+
+export interface ExplanationLine {
+  kind: string;
+  tone: "positive" | "neutral" | "caution";
+  label: string;
+  text: string;
+  raw_value: number | boolean | null;
+  unit: string | null;
+  source_path: string;
+  goal: GoalKey | null;
+}
+
+export interface AlternativeExplanation {
+  card_id: string;
+  card_name: string;
+  feasible: boolean;
+  summary: string;
+  utility_delta_points: number | null;
+  lines: ExplanationLine[];
+}
+
+export interface DecisionCard {
+  card_id: string;
+  card_name: string;
+  purchase_id: string;
+  purchase_label: string;
+  headline: string;
+  status: string;
+  solver_method: string;
+  factor_lines: ExplanationLine[];
+  constraint_lines: ExplanationLine[];
+  alternative: AlternativeExplanation | null;
+  warning_lines: ExplanationLine[];
+}
+
+export interface CardSummary {
+  card_id: string;
+  assigned_purchase_ids: string[];
+  assigned_spend_cents: number;
+  ending_balance_cents: number;
+  ending_utilization_bps: number;
+  bonus_progress_cents: number;
+  bonus_remaining_cents: number;
+  bonus_hit: boolean;
+}
+
+export interface AllocationMetrics {
+  projected_reward_value_cents: number;
+  cashback_cents: number;
+  travel_value_cents: number;
+  max_card_utilization_bps: number;
+  cashflow_value_cents: number;
+  signup_bonus_hit_count: number;
+}
+
+export interface OptimizationIssue {
+  code: string;
+  message: string;
+  suggestion: string | null;
+}
+
+export interface AllocationResult {
+  status: string;
+  solver_method: string;
+  assignments: { purchase_id: string; card_id: string }[];
+  card_summaries: CardSummary[];
+  metrics: AllocationMetrics | null;
+  issues: OptimizationIssue[];
+  warnings: string[];
+}
+
+export interface AllocationExplanation {
+  status: string;
+  solver_method: string;
+  headline: string;
+  summary_lines: ExplanationLine[];
+  decision_cards: DecisionCard[];
+  highlighted_purchase_ids: string[];
+  warning_lines: ExplanationLine[];
+  failure: { headline: string; lines: ExplanationLine[]; suggestions: string[] } | null;
+}
+
+export interface FrontierPoint {
+  label: string;
+  weights_ppm: Record<GoalKey, number>;
+  frontier_metrics: Partial<Record<GoalKey, number>>;
+  allocation: AllocationResult;
+}
+
+export interface FrontierResult {
+  solver_method: string;
+  active_goal_ids: GoalKey[];
+  swept_goal_ids: GoalKey[];
+  grid_size: number;
+  attempted_solves: number;
+  successful_solves: number;
+  complete_frontier: boolean;
+  points: FrontierPoint[];
+  warnings: string[];
+}
+
+export interface FrontierPointExplanation {
+  label: string;
+  summary: string;
+  status: string;
+  solver_method: string;
+  metric_lines: ExplanationLine[];
+}
+
+export interface FrontierExplanation {
+  headline: string;
+  points: FrontierPointExplanation[];
+  disclosure_lines: ExplanationLine[];
+  warning_lines: ExplanationLine[];
+}
+
+export interface WhatIfResult {
+  purchase_id: string;
+  override_card_id: string;
+  base_result: AllocationResult;
+  override_result: AllocationResult;
+  deltas: Record<string, number> | null;
+  changed_assignments: { purchase_id: string; base_card_id: string; override_card_id: string }[];
+}
+
+export interface WhatIfExplanation {
+  headline: string;
+  base_status: string;
+  override_status: string;
+  delta_lines: ExplanationLine[];
+  changed_assignment_lines: ExplanationLine[];
+  warning_lines: ExplanationLine[];
+  failure: { headline: string; lines: ExplanationLine[]; suggestions: string[] } | null;
+}
+
+export interface ParseIntentResult {
+  intent: EngineIntent | null;
+  source: string;
+  provider_name: string;
+  model_id: string;
+  used_fallback: boolean;
+  valid_model_output: boolean;
+  warnings: { code: string; message: string }[];
+}
+
+interface Envelope<T> {
+  data: T;
+}
+
+export const fetchDemoScenario = async (): Promise<EngineScenario> => {
+  const res = await api<Envelope<{ scenario: EngineScenario }>>("/demo-scenario");
+  return res.data.scenario;
+};
+
+export const parseIntent = async (
+  text: string,
+  cards: EngineCard[],
+  reference_date?: string,
+): Promise<ParseIntentResult> => {
+  const res = await api<Envelope<{ result: ParseIntentResult }>>("/parse-intent", {
+    method: "POST",
+    body: JSON.stringify({ text, cards, reference_date: reference_date ?? null }),
+  });
+  return res.data.result;
+};
+
+export const allocateMonth = async (
+  cards: EngineCard[],
+  purchases: EnginePurchase[],
+  intent: EngineIntent,
+  solver_preference: "greedy" | "ilp" = "ilp",
+): Promise<{ result: AllocationResult; explanation: AllocationExplanation }> => {
+  const res = await api<Envelope<{ result: AllocationResult; explanation: AllocationExplanation }>>(
+    "/allocate",
+    {
+      method: "POST",
+      body: JSON.stringify({ cards, purchases, intent, solver_preference }),
+    },
+  );
+  return res.data;
+};
+
+export const sampleFrontier = async (
+  cards: EngineCard[],
+  purchases: EnginePurchase[],
+  intent: EngineIntent,
+  max_points = 4,
+): Promise<{ result: FrontierResult; explanation: FrontierExplanation }> => {
+  const res = await api<Envelope<{ result: FrontierResult; explanation: FrontierExplanation }>>(
+    "/frontier",
+    {
+      method: "POST",
+      body: JSON.stringify({ cards, purchases, intent, solver_preference: "ilp", max_points }),
+    },
+  );
+  return res.data;
+};
+
+export const runWhatIf = async (
+  cards: EngineCard[],
+  purchases: EnginePurchase[],
+  intent: EngineIntent,
+  purchase_id: string,
+  override_card_id: string,
+): Promise<{ result: WhatIfResult; explanation: WhatIfExplanation }> => {
+  const res = await api<Envelope<{ result: WhatIfResult; explanation: WhatIfExplanation }>>(
+    "/what-if",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        cards,
+        purchases,
+        intent,
+        purchase_id,
+        override_card_id,
+        solver_preference: "ilp",
+      }),
+    },
+  );
+  return res.data;
+};
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     cache: "no-store",
