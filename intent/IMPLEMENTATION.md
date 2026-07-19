@@ -1,5 +1,29 @@
 # Intent Parser and SFT Data Implementation Guide
 
+## Implementation status
+
+Implemented and validated locally without credentials:
+
+- Strict provider/parse/result models with safe metadata allowlists and attribution invariants.
+- Versioned JSON-only system prompt with reference date and minimal card context.
+- Safe `Card` to `IntentCardContext` derivation containing only ID, name, and active-bonus state.
+- Async provider protocols plus deterministic fixture intent/paraphrase providers.
+- Strict one-object/fenced-JSON extraction, non-standard-number rejection, known-key validation, missing-goal repair, normalization warnings, absolute date validation, and active-bonus card validation.
+- Visible equal-weight/no-constraint fallback; no-fallback failures remain measurable; async cancellation propagates.
+- Seeded balanced/sparse/two-goal/constraint-heavy latent intent generation with exact ppm vectors.
+- Latent-level deterministic 85/15 split before paraphrasing and global normalized cross-split dedupe.
+- Internal system/user/assistant JSONL records, atomic writes, safe provider cache, corrupted-cache regeneration, SHA-256 train/test/combined hashes, and reproducibility manifests.
+- Fixture datasets explicitly prohibited from production claims; non-fixture production claims require 800-2,000 accepted records.
+- AST enforcement that intent code imports no scoring, solver, optimizer, explanation, or money-calculation module.
+
+Current focused gate: `uv run python -m pytest tests/unit/intent -q` and `uv run python -m ruff check intent tests/unit/intent`.
+
+Externally blocked and deliberately not guessed:
+
+- Freesolo authentication, upload schema, supported base model, training request, and inference response contract.
+- General-model provider/model selection for real offline paraphrase generation and prompted comparison.
+- Real 800-2,000-row generation, SFT run, endpoint integration, and measured three-model eval.
+
 ## 1. Mission and boundary
 
 The intent module turns a user's natural-language goal into the engine's validated `Intent` contract. It also creates supervised fine-tuning examples by sampling structured intents first and asking a general model to paraphrase them.
@@ -15,6 +39,8 @@ External state at scaffold time:
 - General-model API key: unavailable.
 
 Implement provider-independent code and fixture-backed tests first. Leave concrete endpoint payload details gated behind documentation confirmation.
+
+That provider-independent checkpoint is now complete. The external state above still blocks concrete network adapters and training.
 
 ## 2. File ownership
 
