@@ -41,7 +41,20 @@ from engine.models import (
 from engine.models import (
     SolverMethod,
 )
-from engine.optimize import allocate_month, recommend_purchase
+from engine.optimize import (
+    allocate_month,
+    recommend_purchase,
+    run_what_if,
+    sample_frontier,
+)
+from explain import (
+    explain_allocation,
+    explain_frontier,
+    explain_recommendation,
+    explain_what_if,
+)
+from intent import build_intent_card_context, parse_intent
+from intent.providers import FixtureIntentProvider, IntentProvider
 
 
 def create_app() -> FastAPI:
@@ -135,8 +148,53 @@ class AllocateBody(BaseModel):
     solver_preference: Literal["greedy", "ilp"] = "greedy"
 
 
+class ParseIntentBody(BaseModel):
+    text: str = Field(min_length=1, max_length=2_000)
+    cards: list[EngineCard] = Field(min_length=1, max_length=8)
+    reference_date: date | None = None
+
+
+class FrontierBody(BaseModel):
+    cards: list[EngineCard] = Field(min_length=1, max_length=8)
+    purchases: list[EnginePurchase] = Field(min_length=1, max_length=60)
+    intent: EngineIntent
+    solver_preference: Literal["greedy", "ilp"] = "ilp"
+    max_points: int = Field(default=5, ge=1, le=5)
+
+
+class WhatIfBody(BaseModel):
+    cards: list[EngineCard] = Field(min_length=1, max_length=8)
+    purchases: list[EnginePurchase] = Field(min_length=1, max_length=60)
+    intent: EngineIntent
+    purchase_id: str = Field(min_length=1)
+    override_card_id: str = Field(min_length=1)
+    solver_preference: Literal["greedy", "ilp"] = "ilp"
+
+
+# The live money path never trusts a language model. With no Freesolo/general-model
+# endpoint configured, the default provider is deliberately unavailable so
+# ``parse_intent`` returns its visibly-labeled equal-weight fallback (PLAN §7/§8d).
+# Tests and future deployment code swap in a real provider by reassigning this.
+_INTENT_PROVIDER: IntentProvider = FixtureIntentProvider(responses={})
+
+
+def _intent_provider() -> IntentProvider:
+    return _INTENT_PROVIDER
+
+
+def _solver_method(preference: str) -> SolverMethod:
+    return SolverMethod.ILP if preference == "ilp" else SolverMethod.GREEDY
+
+
 def _api_response(data: dict[str, Any], warnings: list[ApiWarning] | None = None) -> ApiResponse:
     return ApiResponse(data=data, warnings=warnings or [])
+
+
+def _engine_config_meta() -> dict[str, Any]:
+    return {
+        "version": DEFAULT_ENGINE_CONFIG.config_version,
+        "hash": engine_config_hash(DEFAULT_ENGINE_CONFIG),
+    }
 
 
 # ---------------------------------------------------------------- helpers
@@ -376,6 +434,27 @@ def demo_scenario() -> ApiResponse:
         conn.close()
 
 
+@app.post("/api/parse-intent")
+async def parse_intent_endpoint(body: ParseIntentBody) -> ApiResponse:
+    """Parse a natural-language goal into a validated ``Intent``.
+
+    Language is the only ML surface. Invalid or unavailable model output yields a
+    visibly-labeled equal-weight fallback (``used_fallback=true``) — the deterministic
+    money path never trusts raw model output.
+    """
+
+    reference_date = body.reference_date or date.today()
+    card_context = build_intent_card_context(body.cards, reference_date)
+    result = await parse_intent(
+        body.text,
+        reference_date,
+        card_context,
+        _intent_provider(),
+        allow_fallback=True,
+    )
+    return _api_response({"result": result.model_dump(mode="json")})
+
+
 @app.post("/api/recommend")
 def recommend(body: RecommendBody) -> ApiResponse:
     result = recommend_purchase(
@@ -384,36 +463,74 @@ def recommend(body: RecommendBody) -> ApiResponse:
         body.intent,
         config=DEFAULT_ENGINE_CONFIG,
     )
+    explanation = explain_recommendation(result, body.cards, body.purchase, body.intent)
     return _api_response(
         {
             "result": result.model_dump(mode="json"),
-            "engine_config": {
-                "version": DEFAULT_ENGINE_CONFIG.config_version,
-                "hash": engine_config_hash(DEFAULT_ENGINE_CONFIG),
-            },
+            "explanation": explanation.model_dump(mode="json"),
+            "engine_config": _engine_config_meta(),
         }
     )
 
 
 @app.post("/api/allocate")
 def allocate(body: AllocateBody) -> ApiResponse:
-    method = SolverMethod.ILP if body.solver_preference == "ilp" else SolverMethod.GREEDY
     result = allocate_month(
         body.cards,
         body.purchases,
         body.intent,
-        method=method,
+        method=_solver_method(body.solver_preference),
         config=DEFAULT_ENGINE_CONFIG,
     )
     # CBC timeout/failure is handled inside the engine: the result comes back
     # honestly labeled heuristic_fallback rather than raising here.
+    explanation = explain_allocation(result, body.cards, body.purchases, body.intent)
     return _api_response(
         {
             "result": result.model_dump(mode="json"),
-            "engine_config": {
-                "version": DEFAULT_ENGINE_CONFIG.config_version,
-                "hash": engine_config_hash(DEFAULT_ENGINE_CONFIG),
-            },
+            "explanation": explanation.model_dump(mode="json"),
+            "engine_config": _engine_config_meta(),
+        }
+    )
+
+
+@app.post("/api/frontier")
+def frontier(body: FrontierBody) -> ApiResponse:
+    result = sample_frontier(
+        body.cards,
+        body.purchases,
+        body.intent,
+        method=_solver_method(body.solver_preference),
+        max_points=body.max_points,
+        config=DEFAULT_ENGINE_CONFIG,
+    )
+    explanation = explain_frontier(result)
+    return _api_response(
+        {
+            "result": result.model_dump(mode="json"),
+            "explanation": explanation.model_dump(mode="json"),
+            "engine_config": _engine_config_meta(),
+        }
+    )
+
+
+@app.post("/api/what-if")
+def what_if(body: WhatIfBody) -> ApiResponse:
+    result = run_what_if(
+        body.cards,
+        body.purchases,
+        body.intent,
+        body.purchase_id,
+        body.override_card_id,
+        method=_solver_method(body.solver_preference),
+        config=DEFAULT_ENGINE_CONFIG,
+    )
+    explanation = explain_what_if(result)
+    return _api_response(
+        {
+            "result": result.model_dump(mode="json"),
+            "explanation": explanation.model_dump(mode="json"),
+            "engine_config": _engine_config_meta(),
         }
     )
 
