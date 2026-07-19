@@ -1,0 +1,28 @@
+{
+  "algorithm": "sft",
+  "base_model": "Qwen/Qwen3.5-4B",
+  "dataset_manifest": "dataset_manifest.json",
+  "dry_run_id": "flash-1784422829-7b761f55",
+  "environment_id": "swipepay/switchpay-intent",
+  "estimated_cost_usd": 2.204137791025641,
+  "final_cost_usd": 2.204137791025641,
+  "model_revision": "",
+  "openai_base_url": "https://clado-ai--freesolo-lora-serving.modal.run/v1",
+  "openai_model": "flash-1784422883-d2bca587",
+  "prompt_version": "intent-v1",
+  "run_id": "flash-1784422883-d2bca587",
+  "seed": 42,
+  "status": "deployed",
+  "submitted_at_utc": "2026-07-19T01:01:23Z",
+  "train": {
+    "epochs": 3,
+    "lora_alpha": 64,
+    "lora_rank": 32,
+    "max_context_tokens": 4096,
+    "max_examples": 240,
+    "max_steps": 120,
+    "save_at_steps": [
+      120
+    ]
+  }
+}

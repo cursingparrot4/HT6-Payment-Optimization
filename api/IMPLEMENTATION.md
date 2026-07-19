@@ -9,9 +9,12 @@
 > `POST /api/recommend`, `POST /api/allocate` (greedy **and** ILP via `solver_preference`),
 > `POST /api/frontier`, and `POST /api/what-if`. `/recommend`, `/allocate`, `/frontier`,
 > and `/what-if` attach the `explain/` structured explanation to the engine result;
-> `/parse-intent` runs the real `intent.parse_intent` path and, because no trained provider
-> is configured, returns the visibly-labeled equal-weight fallback (`used_fallback=true`) —
-> the intent provider lives in `main._INTENT_PROVIDER` and is swapped in tests. These
+> `/parse-intent` runs the real `intent.parse_intent` path and, by default (no provider env
+> configured), returns the visibly-labeled equal-weight fallback (`used_fallback=true`) — the
+> intent provider lives in `main._INTENT_PROVIDER` and is swapped in tests. Setting
+> `SWITCHPAY_INTENT_PROVIDER=freesolo|gemini` selects a live adapter (`FreesoloIntentProvider` /
+> `GeminiIntentProvider`); each stays unavailable until its own API env vars are set, and the
+> deterministic money path still validates every field and falls back on any provider error. These
 > endpoints are covered by `tests/integration/test_engine_endpoints_e2e.py`. The SwitchPay
 > CRUD and payment-lifecycle endpoints predate the envelope and return plain JSON consumed
 > by `ui/web`. Browser CORS **is** enabled for `localhost:3000` because the shipped UI is a

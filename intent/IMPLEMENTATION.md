@@ -40,7 +40,15 @@ External state at scaffold time:
 
 Implement provider-independent code and fixture-backed tests first. Leave concrete endpoint payload details gated behind documentation confirmation.
 
-That provider-independent checkpoint is now complete. The external state above still blocks concrete network adapters and training.
+That provider-independent checkpoint is now complete. Concrete HTTP adapters now exist in
+`providers.py`: `GeminiIntentProvider` (Gemini REST, structured JSON) and `FreesoloIntentProvider`
+(the trained SLM over an OpenAI-compatible chat-completions surface). Both conform to the
+`IntentProvider` protocol on this module's models — typed `IntentProviderUnavailableError` /
+`IntentProviderTimeoutError` / `IntentProviderError`, `ProviderResponse` with the metadata
+allowlist, and the shared `build_intent_system_prompt`. They are opt-in: each self-reports
+unavailable until its API env vars are set, and the API selects one via
+`SWITCHPAY_INTENT_PROVIDER=freesolo|gemini` (default `fixture`). Live measured training and the
+three-model eval still require real Freesolo credentials/endpoint (see `training/`).
 
 ## 2. File ownership
 
@@ -50,7 +58,7 @@ intent/
   __init__.py
   models.py             # provider metadata, parse result, latent examples
   prompts.py            # versioned system prompts and schema rendering
-  providers.py          # protocols, fixture provider, later HTTP adapters
+  providers.py          # protocols, fixture providers, Gemini + Freesolo HTTP adapters
   parser.py             # JSON extraction, validation, fallback
   sampling.py           # seeded latent intent and constraint sampling
   gen_data.py           # paraphrase orchestration, split, dedupe, JSONL

@@ -4,20 +4,13 @@ This directory records confirmed Freesolo upload/inference instructions and repr
 
 A real run record must include base model/revision, SFT hyperparameters, dataset SHA-256 and row counts, run ID/status, output model ID, and endpoint contract. Never commit API keys. SFT is the only permitted training method; reinforcement learning and a second trained model are out of scope.
 
-## Local preparation complete
+## Runtime Freesolo Adapter
 
-The repository now has a provider-independent internal record format, seeded latent sampling, split-before-paraphrase behavior, cache/resume, global dedupe, atomic JSONL output, and manifests containing prompt/NumPy versions plus train/test/combined hashes. Fixture-generated rows are marked `synthetic_fixture=true` and cannot support production claims.
+The app can call a trained Freesolo intent model through the Goal parser when these environment variables are set on the FastAPI process:
 
-## Required before a concrete adapter
+- `FREESOLO_API_KEY`
+- `FREESOLO_BASE_URL`
+- `FREESOLO_MODEL`
+- `FREESOLO_CHAT_COMPLETIONS_PATH` optional, default `/v1/chat/completions`
 
-Record all of the following from current Freesolo documentation before implementing transport code:
-
-1. Documentation URL/version and verification date.
-2. Authentication header and endpoint base URL.
-3. Accepted SFT JSONL shape and whether metadata fields are allowed.
-4. Supported small base model ID/revision.
-5. Training hyperparameter fields and defaults.
-6. Training status/run/model identifiers.
-7. Inference request, structured-output option, response shape, and timeout guidance.
-
-Do not place internal `metadata` into an upload unless the confirmed platform schema permits it. Do not write a generic guessed `messages` uploader and call it Freesolo-compatible.
+The adapter assumes an OpenAI-compatible chat-completions response unless the confirmed Freesolo endpoint contract differs. If it differs, update `intent/providers.py` and record the confirmed contract in the run manifest.

@@ -1,0 +1,15 @@
+model = "Qwen/Qwen3.5-4B"
+algorithm = "sft"
+seed = 42
+
+[environment]
+id = "swipepay/switchpay-intent"
+
+[train]
+epochs = 3
+max_examples = 240
+max_steps = 120
+save_at_steps = [120]
+lora_rank = 32
+lora_alpha = 64
+max_context_tokens = 4096

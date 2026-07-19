@@ -7,6 +7,7 @@ Run with: .venv/bin/uvicorn api.main:app --port 8000
 
 from __future__ import annotations
 
+import os
 import sqlite3
 from datetime import date
 from typing import Any, Literal
@@ -55,7 +56,12 @@ from explain import (
     explain_what_if,
 )
 from intent import build_intent_card_context, parse_intent
-from intent.providers import FixtureIntentProvider, IntentProvider
+from intent.providers import (
+    FixtureIntentProvider,
+    FreesoloIntentProvider,
+    GeminiIntentProvider,
+    IntentProvider,
+)
 
 
 def create_app() -> FastAPI:
@@ -172,11 +178,20 @@ class WhatIfBody(BaseModel):
     solver_preference: Literal["greedy", "ilp"] = "ilp"
 
 
-# The live money path never trusts a language model. With no Freesolo/general-model
-# endpoint configured, the default provider is deliberately unavailable so
-# ``parse_intent`` returns its visibly-labeled equal-weight fallback (PLAN §7/§8d).
-# Tests and future deployment code swap in a real provider by reassigning this.
-_INTENT_PROVIDER: IntentProvider = FixtureIntentProvider(responses={})
+# The live money path never trusts a language model. By default the provider is deliberately
+# unavailable so ``parse_intent`` returns its visibly-labeled equal-weight fallback (PLAN §7/§8d).
+# Set SWITCHPAY_INTENT_PROVIDER=freesolo|gemini to opt into a live model (each self-reports
+# unavailable until its own API env vars are set). Tests reassign _INTENT_PROVIDER directly.
+def _default_intent_provider() -> IntentProvider:
+    choice = os.getenv("SWITCHPAY_INTENT_PROVIDER", "fixture").strip().lower()
+    if choice == "freesolo":
+        return FreesoloIntentProvider()
+    if choice == "gemini":
+        return GeminiIntentProvider()
+    return FixtureIntentProvider(responses={})
+
+
+_INTENT_PROVIDER: IntentProvider = _default_intent_provider()
 
 
 def _intent_provider() -> IntentProvider:

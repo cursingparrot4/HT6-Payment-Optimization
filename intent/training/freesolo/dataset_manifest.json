@@ -1,0 +1,9 @@
+{
+  "eval_rows": 120,
+  "eval_sha256": "343ccdab4a7774cf6cbbdec306f76b037f0328542b7c173c7ce3a922f9608d45",
+  "prompt_version": "intent-v1",
+  "schema": "freesolo-task-record-v1",
+  "seed": 42,
+  "train_rows": 240,
+  "train_sha256": "b0347970bb1bbd7c8068a567f72dcbd730b782f246093d81148e91ae5bac21d5"
+}
