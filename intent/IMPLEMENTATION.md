@@ -47,7 +47,7 @@ That provider-independent checkpoint is now complete. Concrete HTTP adapters now
 `IntentProviderTimeoutError` / `IntentProviderError`, `ProviderResponse` with the metadata
 allowlist, and the shared `build_intent_system_prompt`. They are opt-in: each self-reports
 unavailable until its API env vars are set, and the API selects one via
-`SWITCHPAY_INTENT_PROVIDER=freesolo|gemini` (default `fixture`). Live measured training and the
+`CARDIQ_INTENT_PROVIDER=freesolo|gemini` (default `fixture`). Live measured training and the
 three-model eval still require real Freesolo credentials/endpoint (see `training/`).
 
 ## 2. File ownership

@@ -1,8 +1,8 @@
-"""Deterministic SwitchPay card-selection layer.
+"""Deterministic CardIQ card-selection layer.
 
 Ranks a user's synthetic cards for one recurring payment. All reward, bonus,
 utilization, and headroom arithmetic is delegated to the tested integer-cent
-functions in ``engine.scoring``; this module adds the SwitchPay-specific hard
+functions in ``engine.scoring``; this module adds the CardIQ-specific hard
 eligibility rules (locked, expired, insufficient credit, category exclusions),
 processing fees, payment-failure history, and templated explanations.
 
@@ -47,7 +47,7 @@ def _pct(bps: int) -> str:
 
 
 def _to_engine_card(card: dict[str, Any]) -> EngineCard:
-    """Project a SwitchPay card row onto the engine's Card contract."""
+    """Project a CardIQ card row onto the engine's Card contract."""
 
     return EngineCard(
         id=card["id"],
@@ -366,13 +366,23 @@ def build_projected_states(
     cards: list[dict[str, Any]],
     ordered_payments: list[dict[str, Any]],
     today: date,
+    *,
+    reserve_balance: bool = True,
 ) -> dict[str, list[dict[str, Any]]]:
     """Project card state as-of each payment, in priority order.
 
     Returns, for every payment id, a snapshot of the cards *before* that payment is routed —
-    reflecting the credit headroom and welcome-bonus progress that higher-priority bills have
-    already reserved. Ranking a payment against its snapshot is what keeps its per-payment
-    recommendation consistent with :func:`build_priority_plan`; both share this single pass.
+    reflecting what higher-priority bills have already reserved.
+
+    ``reserve_balance`` controls *what* is reserved:
+
+    - ``True`` reserves both credit headroom **and** the one-time welcome bonus, so later bills
+      see the capacity earlier ones consumed. :func:`build_priority_plan` uses this to measure
+      genuine credit contention.
+    - ``False`` reserves only the welcome bonus (a one-time reward that must not be offered to
+      two payments) while leaving each card's balance fresh. Per-payment recommendation *views*
+      use this so a card's displayed utilization reflects its true current state plus only the
+      bill in front of the user — not an inflated balance stacked from every other planned bill.
     """
 
     projected = [dict(card) for card in cards]
@@ -385,7 +395,10 @@ def build_projected_states(
         if choice is not None:
             for projected_card in projected:
                 if projected_card["id"] == choice["card_id"]:
-                    _apply_projected_payment(projected_card, payment, on_date)
+                    if reserve_balance:
+                        _apply_projected_payment(projected_card, payment, on_date)
+                    else:
+                        _advance_bonus_progress(projected_card, payment, on_date)
                     break
     return snapshots
 

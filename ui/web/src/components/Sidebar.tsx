@@ -30,17 +30,6 @@ const ICONS: Record<string, JSX.Element> = {
       <path d="M15.5 2.5v3h-3M4.5 17.5v-3h3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
-  tracker: (
-    <svg viewBox="0 0 20 20" fill="none" className="h-[18px] w-[18px]">
-      <path
-        d="M2.5 10h3l2-5 3.5 10 2.5-7 1.5 2h2.5"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  ),
   optimize: (
     <svg viewBox="0 0 20 20" fill="none" className="h-[18px] w-[18px]">
       <circle cx="10" cy="10" r="7" stroke="currentColor" strokeWidth="1.6" />
@@ -55,7 +44,6 @@ const NAV = [
   { href: "/cards", label: "Cards", icon: "cards" },
   { href: "/payments", label: "Payments", icon: "payments" },
   { href: "/optimize", label: "Optimizer", icon: "optimize" },
-  { href: "/tracker", label: "Payment Tracker", icon: "tracker" },
 ];
 
 export function Sidebar() {
@@ -76,7 +64,7 @@ export function Sidebar() {
             </svg>
           </span>
           <span className="font-display text-[19px] font-semibold text-[#202332]">
-            Switch<span className="text-[#465bd8]">Pay</span>
+            Card<span className="text-[#465bd8]">IQ</span>
           </span>
         </Link>
 

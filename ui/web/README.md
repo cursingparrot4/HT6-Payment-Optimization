@@ -1,6 +1,6 @@
-# SwitchPay Web UI
+# CardIQ Web UI
 
-Next.js 14 (App Router) + TypeScript + Tailwind frontend for SwitchPay. It renders
+Next.js 14 (App Router) + TypeScript + Tailwind frontend for CardIQ. It renders
 structured output from the FastAPI backend and never recomputes financial metrics —
 all scoring comes from the deterministic engine via the API.
 

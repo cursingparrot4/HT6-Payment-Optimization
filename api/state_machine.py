@@ -1,4 +1,4 @@
-"""Payment lifecycle state machine and failure simulator for SwitchPay.
+"""Payment lifecycle state machine and failure simulator for CardIQ.
 
 Every synthetic transaction walks a scripted path through explicit states.
 Transitions are validated against ``ALLOWED_TRANSITIONS``; the simulator can
@@ -71,7 +71,7 @@ SCENARIOS: dict[str, list[Step]] = {
         Step(AUTH_PENDING, "Contacting the card network for authorization…"),
         Step(
             UNCERTAIN,
-            "Network timeout during authorization. Payment status is uncertain. SwitchPay "
+            "Network timeout during authorization. Payment status is uncertain. CardIQ "
             "will verify the original transaction before attempting another charge.",
         ),
     ],
@@ -80,7 +80,7 @@ SCENARIOS: dict[str, list[Step]] = {
         Step(
             UNCERTAIN,
             "The processor returned an unknown authorization status. Payment status is "
-            "uncertain. SwitchPay will verify the original transaction before attempting "
+            "uncertain. CardIQ will verify the original transaction before attempting "
             "another charge.",
         ),
     ],

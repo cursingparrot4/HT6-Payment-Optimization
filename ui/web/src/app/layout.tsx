@@ -3,9 +3,9 @@ import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
 
 export const metadata: Metadata = {
-  title: "SwitchPay — smarter card routing for big recurring payments",
+  title: "CardIQ — smarter card routing for big recurring payments",
   description:
-    "SwitchPay reevaluates which credit card should fund each large recurring payment and safely recommends switches. Synthetic data only.",
+    "CardIQ reevaluates which credit card should fund each large recurring payment and safely recommends switches. Synthetic data only.",
 };
 
 export default function RootLayout({

@@ -178,9 +178,13 @@ def test_what_if_unknown_card_is_structured_not_a_crash(client: TestClient) -> N
 # --------------------------------------------------------------------- parse-intent
 
 
-def test_parse_intent_returns_visible_fallback_without_a_provider(client: TestClient) -> None:
-    # Default provider is deliberately unavailable: the money path must never
-    # fabricate weights, so parse falls back visibly to equal weights.
+def test_parse_intent_returns_visible_fallback_without_a_provider(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Force the unavailable fixture provider so this stays hermetic regardless of any
+    # CARDIQ_INTENT_PROVIDER set in a local .env: the money path must never fabricate
+    # weights, so parse falls back visibly to equal weights.
+    monkeypatch.setattr(main, "_INTENT_PROVIDER", FixtureIntentProvider(responses={}))
     response = client.post(
         "/api/parse-intent",
         json={"text": "keep utilization low for my mortgage", "cards": _cards()},

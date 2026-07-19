@@ -409,15 +409,33 @@ def _candidate_alternative(
             ),
         ),
     ]
-    summary = (
-        f"{card.name} ties on modeled utility; the deterministic card-ID "
-        "tie-break selected the winner."
-        if utility_delta == 0
-        else (
-            f"{card.name} ranks lower by {format_points(abs(utility_delta))}; "
-            "utility points are comparison units, not money."
+    # Phrase the comparison in raw measurements (dollars, percent), never the internal
+    # utility-point scale — that number runs into the millions (weights are quantized to
+    # sum to 1,000,000) and reads as a glitch to a user. The signed integer delta is still
+    # carried on ``utility_delta_points`` for machine consumers.
+    if utility_delta == 0:
+        summary = (
+            f"{card.name} ties on modeled utility; the deterministic card-ID "
+            "tie-break selected the winner."
         )
-    )
+    else:
+        offers: list[str] = []
+        if reward_delta != 0:
+            direction = "more" if reward_delta > 0 else "less"
+            offers.append(f"{format_cents(abs(reward_delta))} {direction} in reward value")
+        if utilization_delta != 0:
+            offers.append(
+                f"ending utilization of "
+                f"{format_bps(alternative.raw_factors.utilization_after_bps)} "
+                f"({format_bps(utilization_delta, signed=True)} vs the winner)"
+            )
+        if offers:
+            summary = (
+                f"{card.name} offers " + " and ".join(offers) + ", but ranks lower once "
+                "every weighted goal is combined."
+            )
+        else:
+            summary = f"{card.name} ranks lower once every weighted goal is combined."
     return AlternativeExplanation(
         card_id=card.id,
         card_name=card.name,
@@ -620,8 +638,15 @@ def _assignment_alternative(
         card_name=card.name,
         feasible=True,
         summary=(
-            f"Moving only this purchase to {card.name} changes plan utility by "
-            f"{format_points(alternative.total_utility_delta, signed=True)}."
+            f"Moving only this purchase to {card.name} "
+            + (
+                "improves overall plan value"
+                if alternative.total_utility_delta > 0
+                else "reduces overall plan value"
+                if alternative.total_utility_delta < 0
+                else "leaves overall plan value unchanged"
+            )
+            + " once every weighted goal is combined; see the metric changes below."
         ),
         utility_delta_points=alternative.total_utility_delta,
         lines=_delta_lines(alternative.metric_deltas, f"{source_path}.metric_deltas"),

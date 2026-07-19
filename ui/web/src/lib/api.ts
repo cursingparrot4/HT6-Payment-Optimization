@@ -1,4 +1,4 @@
-// Typed client for the SwitchPay API. All money values are integer cents.
+// Typed client for the CardIQ API. All money values are integer cents.
 
 export interface Card {
   id: string;
@@ -172,7 +172,7 @@ export const fetchCatalog = async (): Promise<CatalogProduct[]> => {
 // ---------------------------------------------------------------------------
 // Deterministic optimization engine (PLAN.md §11). These endpoints return the
 // weighted multi-objective plan plus faithful, templated explanations — the
-// money math the simpler SwitchPay ranking above does not perform.
+// money math the simpler CardIQ ranking above does not perform.
 // ---------------------------------------------------------------------------
 
 export type GoalKey =
@@ -497,7 +497,7 @@ export const moneyShort = (cents: number | null | undefined): string => {
 export const pct = (bps: number): string => `${(bps / 100).toFixed(1)}%`;
 
 export const newIdempotencyKey = (): string =>
-  `switchpay-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  `cardiq-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
 export const STATE_LABELS: Record<string, string> = {
   scheduled: "Scheduled",

@@ -234,9 +234,9 @@ The UI says the heuristic did not find a plan, not that no plan exists.
 
 **Behavior:** show successful sampled plans, attempted/successful count, warnings, and incomplete disclosure. If no solve succeeds, show domain failure only.
 
-## 8b. SwitchPay payment-lifecycle failures (implemented in `api/`)
+## 8b. CardIQ payment-lifecycle failures (implemented in `api/`)
 
-The shipped SwitchPay layer adds a simulated payment lifecycle on top of the engine.
+The shipped CardIQ layer adds a simulated payment lifecycle on top of the engine.
 Its failure contract:
 
 ### Duplicate payment request
@@ -262,7 +262,7 @@ No retry or switch happens without user approval.
 **Detection:** simulator scenario ends in `status_uncertain`.
 
 **Behavior:** the transaction parks; the UI states "Payment status is uncertain.
-SwitchPay will verify the original transaction before attempting another charge."
+CardIQ will verify the original transaction before attempting another charge."
 There is no automatic retry. Verification either resumes the original charge
 (confirmed — no second charge) or marks it failed (not found — safe to retry with a
 new idempotency key).

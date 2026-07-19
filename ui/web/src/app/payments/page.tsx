@@ -118,7 +118,7 @@ export default function PaymentsPage() {
     <>
       <PageHeader
         title="Recurring payments"
-        subtitle="Large synthetic payments SwitchPay routes to the best card before every due date."
+        subtitle="Large synthetic payments CardIQ routes to the best card before every due date."
         actions={
           <button className="btn-primary" onClick={openAdd}>
             Add payment

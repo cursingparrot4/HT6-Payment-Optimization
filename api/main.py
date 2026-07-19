@@ -1,4 +1,4 @@
-"""SwitchPay HTTP API.
+"""CardIQ HTTP API.
 
 FastAPI application exposing synthetic cards, recurring payments, the
 deterministic switch recommendation, and the simulated payment lifecycle.
@@ -12,9 +12,14 @@ import sqlite3
 from datetime import date
 from typing import Any, Literal
 
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+# Populate os.environ from the gitignored .env before _default_intent_provider reads it.
+# Real environment variables win; load_dotenv never overrides an already-set variable.
+load_dotenv()
 
 from api import state_machine as sm
 from api.db import connect, fake_token, log_event, new_id, now_iso, rows_to_dicts
@@ -65,7 +70,7 @@ from intent.providers import (
 
 
 def create_app() -> FastAPI:
-    """Return the SwitchPay FastAPI app.
+    """Return the CardIQ FastAPI app.
 
     Route handlers are module-level for the hackathon demo, but the exported factory gives
     tests and future deployment code a stable construction point.
@@ -74,7 +79,7 @@ def create_app() -> FastAPI:
     return app
 
 
-app = FastAPI(title="SwitchPay API", version="0.2.0")
+app = FastAPI(title="CardIQ API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -180,10 +185,10 @@ class WhatIfBody(BaseModel):
 
 # The live money path never trusts a language model. By default the provider is deliberately
 # unavailable so ``parse_intent`` returns its visibly-labeled equal-weight fallback (PLAN §7/§8d).
-# Set SWITCHPAY_INTENT_PROVIDER=freesolo|gemini to opt into a live model (each self-reports
+# Set CARDIQ_INTENT_PROVIDER=freesolo|gemini to opt into a live model (each self-reports
 # unavailable until its own API env vars are set). Tests reassign _INTENT_PROVIDER directly.
 def _default_intent_provider() -> IntentProvider:
-    choice = os.getenv("SWITCHPAY_INTENT_PROVIDER", "fixture").strip().lower()
+    choice = os.getenv("CARDIQ_INTENT_PROVIDER", "fixture").strip().lower()
     if choice == "freesolo":
         return FreesoloIntentProvider()
     if choice == "gemini":
@@ -315,7 +320,10 @@ def _projected_recommendation(
 
     cards = _all_cards(conn)
     ordered = _ordered_payments(conn)
-    projected = build_projected_states(cards, ordered, date.today())
+    # Reserve only the one-time welcome bonus, not credit headroom, so this payment's
+    # displayed utilization reflects each card's true current state plus just this bill —
+    # not a balance inflated by every other planned bill (see build_projected_states).
+    projected = build_projected_states(cards, ordered, date.today(), reserve_balance=False)
     return _recommendation_for(
         conn, payment, exclude, projected_cards=projected.get(payment["id"])
     )
@@ -400,7 +408,7 @@ def _apply_decline(conn: sqlite3.Connection, txn: dict[str, Any], reason: str) -
         log_event(
             conn,
             "failover_recommended",
-            f"Primary card failed; SwitchPay recommends the backup card "
+            f"Primary card failed; CardIQ recommends the backup card "
             f"({failover['ranked'][0]['card_name']}). No duplicate charge was created — "
             "approve the switch and retry with a new idempotency key.",
             transaction_id=txn["id"],
@@ -416,7 +424,7 @@ def _apply_decline(conn: sqlite3.Connection, txn: dict[str, Any], reason: str) -
 def health() -> dict[str, Any]:
     return {
         "ok": True,
-        "service": "switchpay",
+        "service": "cardiq",
         "synthetic_only": True,
         "schema_version": "1.0",
         "engine": {
@@ -450,8 +458,8 @@ def demo_scenario() -> ApiResponse:
             cards = _all_cards(conn)
             payments = _ordered_payments(conn)
         scenario = EngineScenario(
-            id="switchpay-local",
-            name="SwitchPay local synthetic scenario",
+            id="cardiq-local",
+            name="CardIQ local synthetic scenario",
             reference_date=date.today(),
             cards=[_engine_card_from_row(card) for card in cards],
             purchases=[_engine_purchase_from_payment(payment) for payment in payments],
@@ -1077,7 +1085,10 @@ def dashboard() -> dict[str, Any]:
         payments = _ordered_payments(conn)
         today = date.today()
         priority_plan = build_priority_plan(cards, payments, today)
-        projected = build_projected_states(cards, payments, today)
+        # Per-payment rows display each card's true current utilization plus only their own
+        # bill, so reserve the one-time bonus but not balance. build_priority_plan keeps its
+        # own full-reservation projection internally for the off-optimal contention metric.
+        projected = build_projected_states(cards, payments, today, reserve_balance=False)
 
         total_rewards = 0
         total_fees = 0
@@ -1152,7 +1163,7 @@ def dashboard() -> dict[str, Any]:
                 {
                     "kind": "uncertain",
                     "message": (
-                        "Payment status is uncertain. SwitchPay will verify the original "
+                        "Payment status is uncertain. CardIQ will verify the original "
                         "transaction before attempting another charge."
                     ),
                     "transaction_id": txn["id"],

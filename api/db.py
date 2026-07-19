@@ -1,4 +1,4 @@
-"""SQLite persistence for SwitchPay's synthetic cards, payments, and transactions.
+"""SQLite persistence for CardIQ's synthetic cards, payments, and transactions.
 
 All monetary values are integer cents. All card records carry a fake token
 (``synthetic_tok_*``) instead of a PAN; no real credentials exist anywhere.
@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-DB_PATH = Path(__file__).resolve().parent.parent / "data" / "switchpay.db"
+DB_PATH = Path(__file__).resolve().parent.parent / "data" / "cardiq.db"
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS cards (

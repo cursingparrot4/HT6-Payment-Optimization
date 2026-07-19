@@ -1,7 +1,7 @@
 # FastAPI Implementation Guide
 
 > **Status (2026-07-18, updated):** the shipped backend in this directory implements the
-> SwitchPay product (see the repo README): `db.py` (SQLite), `recommender.py` (card ranking +
+> CardIQ product (see the repo README): `db.py` (SQLite), `recommender.py` (card ranking +
 > priority plan + templated explanations over `engine.scoring`; `build_projected_states` gives the
 > dashboard, per-payment recommendation, switch, and failover surfaces one shared priority-projected
 > card state, so a one-time welcome bonus a higher-priority bill claims is never re-offered),
@@ -15,10 +15,10 @@
 > `/parse-intent` runs the real `intent.parse_intent` path and, by default (no provider env
 > configured), returns the visibly-labeled equal-weight fallback (`used_fallback=true`) — the
 > intent provider lives in `main._INTENT_PROVIDER` and is swapped in tests. Setting
-> `SWITCHPAY_INTENT_PROVIDER=freesolo|gemini` selects a live adapter (`FreesoloIntentProvider` /
+> `CARDIQ_INTENT_PROVIDER=freesolo|gemini` selects a live adapter (`FreesoloIntentProvider` /
 > `GeminiIntentProvider`); each stays unavailable until its own API env vars are set, and the
 > deterministic money path still validates every field and falls back on any provider error. These
-> endpoints are covered by `tests/integration/test_engine_endpoints_e2e.py`. The SwitchPay
+> endpoints are covered by `tests/integration/test_engine_endpoints_e2e.py`. The CardIQ
 > CRUD and payment-lifecycle endpoints predate the envelope and return plain JSON consumed
 > by `ui/web`. Browser CORS **is** enabled for `localhost:3000` because the shipped UI is a
 > Next.js browser client, not Streamlit (§11 below reflects the original plan). The

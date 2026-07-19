@@ -104,7 +104,7 @@ export default function DashboardPage() {
   if (error) {
     return (
       <div className="panel p-6 text-sm text-rose-700">
-        Could not reach the SwitchPay API ({error}). Start it with{" "}
+        Could not reach the CardIQ API ({error}). Start it with{" "}
         <code className="rounded bg-rose-50 px-1">
           .venv/bin/uvicorn api.main:app --port 8000
         </code>
@@ -495,17 +495,7 @@ function AlertsPanel({ alerts }: { alerts: DashboardData["alerts"] }) {
                   {alert.kind.replace("_", " ")}
                 </Badge>
               </span>
-              <span>
-                {alert.message}
-                {alert.transaction_id ? (
-                  <>
-                    {" "}
-                    <Link href="/tracker" className="font-semibold text-[#465bd8] hover:underline">
-                      Verify
-                    </Link>
-                  </>
-                ) : null}
-              </span>
+              <span>{alert.message}</span>
             </li>
           ))}
         </ul>

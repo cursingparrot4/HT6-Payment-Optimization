@@ -1,4 +1,4 @@
-"""Legality tests for the SwitchPay payment state machine and simulator scripts."""
+"""Legality tests for the CardIQ payment state machine and simulator scripts."""
 
 from __future__ import annotations
 

@@ -52,7 +52,7 @@ def _purchase(purchase_id: str = "rent") -> dict:
     }
 
 
-def test_create_app_returns_switchpay_app() -> None:
+def test_create_app_returns_cardiq_app() -> None:
     client = TestClient(create_app())
     response = client.get("/api/health")
     assert response.status_code == 200

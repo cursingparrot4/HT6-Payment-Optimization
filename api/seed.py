@@ -3,7 +3,7 @@
 Wallet cards come from the Sarah scenario (``data/scenarios/sarah_august_2026.json``),
 whose cards are validated against the sourced product catalog in ``data/cards.json``.
 Public product terms are real; every account value (limits, balances, bonus progress,
-payments) is synthetic. Recurring purchases in the scenario become SwitchPay's
+payments) is synthetic. Recurring purchases in the scenario become CardIQ's
 recurring payments, ordered by priority.
 """
 

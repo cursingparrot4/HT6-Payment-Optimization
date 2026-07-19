@@ -90,8 +90,15 @@ function DecisionCardView({
       ) : null}
       {card.alternative ? (
         <div className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-[13px] text-slate-600">
-          <span className="font-semibold text-slate-500">Why not {card.alternative.card_name}? </span>
-          {card.alternative.summary}
+          <p>
+            <span className="font-semibold text-slate-500">Why not {card.alternative.card_name}? </span>
+            {card.alternative.summary}
+          </p>
+          {card.alternative.lines.length > 0 ? (
+            <div className="mt-2">
+              <LineList lines={card.alternative.lines} />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

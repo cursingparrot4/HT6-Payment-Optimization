@@ -1,10 +1,10 @@
 # Streamlit UI Implementation Guide
 
 > **Status (2026-07-18, updated):** this guide planned a Streamlit demo, but the shipped UI
-> is the SwitchPay web app in `ui/web` — Next.js 14 + TypeScript + Tailwind, run with
+> is the CardIQ web app in `ui/web` — Next.js 14 + TypeScript + Tailwind, run with
 > `npm run dev` (see `ui/web/README.md`). It talks to the FastAPI backend over HTTP and
 > follows this guide's core boundary rule: it never recomputes financial metrics, it only
-> renders structured API output. Alongside the SwitchPay dashboard/cards/payments/tracker
+> renders structured API output. Alongside the CardIQ dashboard/cards/payments/tracker
 > pages, the **Optimizer** page (`src/app/optimize/page.tsx`) implements the §11 engine
 > demo arc against the engine endpoints: a natural-language goal box → `POST /api/parse-intent`
 > (with a visible fallback banner), editable objective-weight sliders and hard-constraint

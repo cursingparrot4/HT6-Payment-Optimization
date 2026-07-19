@@ -1,4 +1,4 @@
-"""Deterministic tests for the SwitchPay card-selection layer over engine scoring."""
+"""Deterministic tests for the CardIQ card-selection layer over engine scoring."""
 
 from __future__ import annotations
 

@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Evaluation, Recommendation, api, money, pct } from "@/lib/api";
@@ -54,11 +53,6 @@ export default function RecommendationPage() {
       <PageHeader
         title={`${payment.name}: card recommendation`}
         subtitle={`${money(payment.amount_cents)} · ${payment.frequency} · due ${payment.due_date} · evaluated deterministically on ${rec.evaluated_on}. No AI model performs any arithmetic or makes the final decision.`}
-        actions={
-          <Link href="/tracker" className="btn-secondary">
-            Go to tracker
-          </Link>
-        }
       />
 
       {approved && (
@@ -106,7 +100,7 @@ export default function RecommendationPage() {
               : `Approve switch to ${rec.switch.to_card_name}`}
           </button>
           <p className="mt-2 text-xs text-slate-400">
-            Nothing changes until you approve. SwitchPay never switches cards silently.
+            Nothing changes until you approve. CardIQ never switches cards silently.
           </p>
         </div>
       ) : (

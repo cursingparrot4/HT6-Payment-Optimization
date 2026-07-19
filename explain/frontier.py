@@ -254,6 +254,21 @@ def explain_frontier(result: FrontierResult) -> FrontierExplanation:
     )
 
 
+def _utility_direction(value: int, *, signed: bool = False) -> str:
+    """Report only the direction of the internal weighted-utility change.
+
+    The raw figure runs into the millions (weights are quantized to sum to 1,000,000) and
+    monetizing it is forbidden by invariant #4, so users see direction while the signed
+    integer stays on the line's ``raw_value`` for machine consumers.
+    """
+
+    if value > 0:
+        return "Overall modeled utility improves once every weighted goal is combined"
+    if value < 0:
+        return "Overall modeled utility drops once every weighted goal is combined"
+    return "Overall modeled utility is unchanged"
+
+
 def _what_if_delta_lines(delta: MetricDelta) -> list[ExplanationLine]:
     definitions = [
         (
@@ -312,8 +327,8 @@ def _what_if_delta_lines(delta: MetricDelta) -> list[ExplanationLine]:
             ExplanationKind.SOLVER,
             delta.total_utility,
             ExplanationUnit.POINTS,
-            "Modeled utility change: ",
-            format_points,
+            "",
+            _utility_direction,
             None,
         ),
     ]
