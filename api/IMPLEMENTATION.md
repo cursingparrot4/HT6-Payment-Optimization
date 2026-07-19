@@ -2,7 +2,10 @@
 
 > **Status (2026-07-18, updated):** the shipped backend in this directory implements the
 > SwitchPay product (see the repo README): `db.py` (SQLite), `recommender.py` (card ranking +
-> priority plan + templated explanations over `engine.scoring`), `state_machine.py`
+> priority plan + templated explanations over `engine.scoring`; `build_projected_states` gives the
+> dashboard, per-payment recommendation, switch, and failover surfaces one shared priority-projected
+> card state, so a one-time welcome bonus a higher-priority bill claims is never re-offered),
+> `state_machine.py`
 > (payment lifecycle), `seed.py`, and `main.py` (all routes). **All engine endpoints from
 > this guide's plan are now implemented** with the versioned `ApiResponse` envelope:
 > `GET /api/health`, `GET /api/demo-scenario`, `POST /api/parse-intent`,

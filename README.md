@@ -27,11 +27,14 @@ Open http://localhost:3000 — the dashboard's **Reset demo** button loads the d
 the committed data fixtures: the Sarah scenario's four catalog-backed cards (RBC Avion
 Visa Infinite, Amex Gold Rewards, Scotia Momentum Visa Infinite, Rogers Red World
 Elite — real public product terms from `data/cards.json`, synthetic account state) and
-its six recurring bills. Rent should switch to the Amex Gold card because the payment
-completes its $500 welcome bonus. The dashboard shows priority-aware routing: drag
-bills to reorder them, and higher-priority bills reserve credit headroom and bonus
-progress before lower ones are scored, with any "off optimal" loss quantified per
-payment.
+its six recurring bills. Rent should switch to the Amex Gold card because that one payment
+completes its $500 welcome bonus; the remaining bills route to whichever card wins on ordinary
+rate once the bonus is claimed. The dashboard shows priority-aware routing: drag bills to
+reorder them, and higher-priority bills reserve credit headroom and bonus progress before lower
+ones are scored. The per-payment "off optimal" figure measures only the genuine cost of the
+priority ordering (a scarce card's limit consumed by an earlier bill) — its reference optimum
+shares the one-time welcome bonus rather than crediting it to every bill, so a plan that simply
+routes each bill to its best remaining card reads as $0 off, not a phantom loss.
 
 Key properties:
 
