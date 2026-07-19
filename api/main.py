@@ -19,6 +19,7 @@ from api import state_machine as sm
 from api.db import connect, fake_token, log_event, new_id, now_iso, rows_to_dicts
 from api.recommender import (
     build_priority_plan,
+    build_projected_states,
     build_switch_recommendation,
     evaluate_card,
     rank_cards,
@@ -276,13 +277,33 @@ def _recommendation_for(
     conn: sqlite3.Connection,
     payment: dict[str, Any],
     exclude: set[str] | None = None,
+    *,
+    projected_cards: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    cards = _all_cards(conn)
+    # Rank against the priority-projected card state when supplied, so a welcome bonus a
+    # higher-priority bill already claimed is not offered again to this payment. Callers that
+    # omit projected_cards fall back to raw current state.
+    cards = projected_cards if projected_cards is not None else _all_cards(conn)
     on_date = max(date.fromisoformat(payment["due_date"]), date.today())
     ranking = rank_cards(cards, payment, on_date, exclude_card_ids=exclude)
     ranking["switch"] = build_switch_recommendation(ranking, payment)
     ranking["payment"] = _payment_with_names(conn, payment)
     return ranking
+
+
+def _projected_recommendation(
+    conn: sqlite3.Connection,
+    payment: dict[str, Any],
+    exclude: set[str] | None = None,
+) -> dict[str, Any]:
+    """Recommend a card for one payment using the same priority projection as the dashboard."""
+
+    cards = _all_cards(conn)
+    ordered = _ordered_payments(conn)
+    projected = build_projected_states(cards, ordered, date.today())
+    return _recommendation_for(
+        conn, payment, exclude, projected_cards=projected.get(payment["id"])
+    )
 
 
 def _get_script(scenario: str) -> list[sm.Step]:
@@ -355,7 +376,7 @@ def _apply_decline(conn: sqlite3.Connection, txn: dict[str, Any], reason: str) -
         (f"failed: {reason}", txn["payment_id"]),
     )
     payment = _get_payment(conn, txn["payment_id"])
-    failover = _recommendation_for(conn, payment, exclude={txn["card_id"]})
+    failover = _projected_recommendation(conn, payment, exclude={txn["card_id"]})
     primary = failover["primary_card_id"]
     if primary:
         conn.execute(
@@ -794,7 +815,7 @@ def payment_recommendation(payment_id: str, exclude: str | None = None) -> dict[
     try:
         payment = _get_payment(conn, payment_id)
         exclude_ids = {exclude} if exclude else None
-        return _recommendation_for(conn, payment, exclude_ids)
+        return _projected_recommendation(conn, payment, exclude_ids)
     finally:
         conn.close()
 
@@ -806,7 +827,7 @@ def approve_switch(payment_id: str, body: SwitchBody) -> dict[str, Any]:
         payment = _get_payment(conn, payment_id)
         card = _get_card(conn, body.to_card_id)
         previous = payment.get("funding_card_id")
-        ranking = _recommendation_for(conn, payment)
+        ranking = _projected_recommendation(conn, payment)
         backup = ranking["backup_card_id"]
         conn.execute(
             "UPDATE payments SET funding_card_id = ?, backup_card_id = ? WHERE id = ?",
@@ -1041,6 +1062,7 @@ def dashboard() -> dict[str, Any]:
         payments = _ordered_payments(conn)
         today = date.today()
         priority_plan = build_priority_plan(cards, payments, today)
+        projected = build_projected_states(cards, payments, today)
 
         total_rewards = 0
         total_fees = 0
@@ -1048,7 +1070,9 @@ def dashboard() -> dict[str, Any]:
         alerts: list[dict[str, str]] = []
 
         for payment in payments:
-            ranking = _recommendation_for(conn, payment)
+            ranking = _recommendation_for(
+                conn, payment, projected_cards=projected.get(payment["id"])
+            )
             switch = ranking["switch"]
             funding_eval = None
             if payment.get("funding_card_id"):

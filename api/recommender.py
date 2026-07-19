@@ -345,9 +345,8 @@ def rank_cards(
     }
 
 
-def _apply_projected_payment(card: dict[str, Any], payment: dict[str, Any], on_date: date) -> None:
-    fee_cents = payment["amount_cents"] * payment["processing_fee_bps"] // 10_000
-    card["current_balance_cents"] += payment["amount_cents"] + fee_cents
+def _advance_bonus_progress(card: dict[str, Any], payment: dict[str, Any], on_date: date) -> None:
+    """Credit spend toward the card's welcome bonus (a one-time, shared resource)."""
 
     bonus_active = card.get("bonus_target_cents") and card.get("bonus_deadline")
     if bonus_active and on_date <= date.fromisoformat(card["bonus_deadline"]):
@@ -357,6 +356,40 @@ def _apply_projected_payment(card: dict[str, Any], payment: dict[str, Any], on_d
         )
 
 
+def _apply_projected_payment(card: dict[str, Any], payment: dict[str, Any], on_date: date) -> None:
+    fee_cents = payment["amount_cents"] * payment["processing_fee_bps"] // 10_000
+    card["current_balance_cents"] += payment["amount_cents"] + fee_cents
+    _advance_bonus_progress(card, payment, on_date)
+
+
+def build_projected_states(
+    cards: list[dict[str, Any]],
+    ordered_payments: list[dict[str, Any]],
+    today: date,
+) -> dict[str, list[dict[str, Any]]]:
+    """Project card state as-of each payment, in priority order.
+
+    Returns, for every payment id, a snapshot of the cards *before* that payment is routed —
+    reflecting the credit headroom and welcome-bonus progress that higher-priority bills have
+    already reserved. Ranking a payment against its snapshot is what keeps its per-payment
+    recommendation consistent with :func:`build_priority_plan`; both share this single pass.
+    """
+
+    projected = [dict(card) for card in cards]
+    snapshots: dict[str, list[dict[str, Any]]] = {}
+    for payment in ordered_payments:
+        snapshots[payment["id"]] = [dict(card) for card in projected]
+        on_date = max(date.fromisoformat(payment["due_date"]), today)
+        ranking = rank_cards(projected, payment, on_date)
+        choice = ranking["ranked"][0] if ranking["ranked"] else None
+        if choice is not None:
+            for projected_card in projected:
+                if projected_card["id"] == choice["card_id"]:
+                    _apply_projected_payment(projected_card, payment, on_date)
+                    break
+    return snapshots
+
+
 def build_priority_plan(
     cards: list[dict[str, Any]],
     payments: list[dict[str, Any]],
@@ -364,21 +397,29 @@ def build_priority_plan(
 ) -> dict[str, dict[str, Any]]:
     """Route payments in priority order and compare each route to its independent best.
 
-    Earlier payments reserve credit headroom and advance welcome-bonus progress before lower
-    priority payments are evaluated. The weighted loss shows how far the priority-aware route is
-    from the independent per-payment optimum.
+    Two card states evolve as payments are routed:
+
+    - ``projected_cards`` (the actual priority-order plan) reserves both credit headroom and
+      welcome-bonus progress, so later bills see the capacity earlier ones consumed.
+    - ``independent_cards`` (the reference optimum) reserves only the welcome bonus. A signup
+      bonus is a one-time reward: if it were counted fresh for every payment, each bill would
+      claim the same bonus and the "optimum" would be physically unachievable. Credit headroom
+      is left fresh so the residual gap isolates the genuine cost of priority ordering — a
+      high-priority bill hogging a scarce card's limit before a lower-priority bill is scored.
+
+    The weighted loss is how far the priority-aware route falls short of that honest optimum.
     """
 
     total = len(payments)
-    projected_cards = [dict(card) for card in cards]
-    original_cards = [dict(card) for card in cards]
+    projected_snapshots = build_projected_states(cards, payments, today)
+    independent_cards = [dict(card) for card in cards]
     plan: dict[str, dict[str, Any]] = {}
 
     for index, payment in enumerate(payments):
         on_date = max(date.fromisoformat(payment["due_date"]), today)
         weight = total - index
-        priority_ranking = rank_cards(projected_cards, payment, on_date)
-        independent_ranking = rank_cards(original_cards, payment, on_date)
+        priority_ranking = rank_cards(projected_snapshots[payment["id"]], payment, on_date)
+        independent_ranking = rank_cards(independent_cards, payment, on_date)
         priority_choice = priority_ranking["ranked"][0] if priority_ranking["ranked"] else None
         independent_choice = (
             independent_ranking["ranked"][0] if independent_ranking["ranked"] else None
@@ -436,10 +477,13 @@ def build_priority_plan(
             "priority_reason": reason,
         }
 
-        if priority_choice is not None:
-            for projected_card in projected_cards:
-                if projected_card["id"] == priority_choice["card_id"]:
-                    _apply_projected_payment(projected_card, payment, on_date)
+        # Priority-route reservations are applied up front in build_projected_states; here we
+        # only advance the reference optimum, which shares the one-time bonus but not credit
+        # headroom, so a bonus a payment claims cannot be re-counted for the payments that follow.
+        if independent_choice is not None:
+            for independent_card in independent_cards:
+                if independent_card["id"] == independent_choice["card_id"]:
+                    _advance_bonus_progress(independent_card, payment, on_date)
                     break
 
     return plan
