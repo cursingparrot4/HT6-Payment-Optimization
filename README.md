@@ -1,7 +1,5 @@
 # CardIQ — Payment Optimization Engine
 
-**Hack the 6ix · Chexy track**
-
 CardIQ decides *which card should fund each recurring bill* — rent, tuition, utilities,
 insurance, taxes — and re-decides safely whenever rewards, welcome bonuses, balances,
 limits, deadlines, or card availability change.
