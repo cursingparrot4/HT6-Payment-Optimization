@@ -1,27 +1,42 @@
-# Payment Optimization Engine - Canonical Implementation Plan
+# CardIQ — Technical Design Reference
 
-> **Audience:** two implementers working in parallel during a 1-2 day hackathon.
-> **Authority:** this file owns scope, sequencing, cross-module contracts, and integration gates. Each module's `IMPLEMENTATION.md` owns the detailed design inside that boundary. If a module guide conflicts with this file, this file wins until the conflict is resolved here.
+This is the engineering design record for the project: the invariants that constrain every
+module, the shared data contracts, the rationale behind the harder calls, and the failure-mode
+contract. The [`README`](README.md) is the pitch and quickstart; this file is the depth behind it.
+Each module's `IMPLEMENTATION.md` owns the detailed design inside that module's boundary — if a
+module guide conflicts with this file, this file wins.
 
-## A. How to use this repository
+## Contents
 
-Read this section and [the shared integration contracts](docs/INTEGRATION_CONTRACTS.md) before writing code. Then read only the implementation guide for the module you own:
+- [A. Repository guide](#a-repository-guide)
+- [B. Non-negotiable invariants](#b-non-negotiable-invariants)
+- [C. Dependency direction](#c-dependency-direction)
+- [D. Contracts and data models](#d-contracts-and-data-models)
+- [E. Design rationale](#e-design-rationale)
+- [F. Failure modes and reliability contract](#f-failure-modes-and-reliability-contract)
+- [G. Original product framing](#g-original-product-framing)
+
+---
+
+## A. Repository guide
 
 | Area | Guide | Owns |
 |---|---|---|
 | Deterministic engine | [engine/IMPLEMENTATION.md](engine/IMPLEMENTATION.md) | Domain models, scoring, feasibility, recommendation, greedy allocation, ILP, frontier, what-if |
-| Synthetic scenarios | [data/IMPLEMENTATION.md](data/IMPLEMENTATION.md) | Fake card catalog, Sarah scenario, validated fixture loading |
+| Synthetic scenarios | [data/IMPLEMENTATION.md](data/IMPLEMENTATION.md) | Card catalog, Sarah scenario, validated fixture loading |
 | Intent parser and SFT data | [intent/IMPLEMENTATION.md](intent/IMPLEMENTATION.md) | Provider boundary, validation/fallback, reverse data generation, Freesolo integration |
 | Explanation layer | [explain/IMPLEMENTATION.md](explain/IMPLEMENTATION.md) | Faithful structured decision cards and comparisons |
 | HTTP API | [api/IMPLEMENTATION.md](api/IMPLEMENTATION.md) | FastAPI request/response contracts and application wiring |
-| Streamlit demo | [ui/IMPLEMENTATION.md](ui/IMPLEMENTATION.md) | Operational browser workflow; no financial recomputation |
+| Web UI | [ui/IMPLEMENTATION.md](ui/IMPLEMENTATION.md) | Next.js dashboard and optimizer; no financial recomputation |
 | Model evaluation | [eval/IMPLEMENTATION.md](eval/IMPLEMENTATION.md) | Frozen comparisons and downstream solver-verification metrics |
 | Test strategy | [tests/IMPLEMENTATION.md](tests/IMPLEMENTATION.md) | Test layers, fixtures, brute-force oracle, integration gates |
-| Reviewed decisions | [docs/LOGIC_REVIEW.md](docs/LOGIC_REVIEW.md) | Resolved ambiguities, assumptions, limitations, and rejected alternatives |
-| Parallel workflow | [docs/PARALLEL_WORKFLOW.md](docs/PARALLEL_WORKFLOW.md) | Branch ownership, merge order, handoffs, and contract-change protocol |
-| Failure behavior | [FAILURE_MODES.md](FAILURE_MODES.md) | Error semantics, fallback behavior, recovery, and demo resilience |
+| Product provenance | [data/SOURCES.md](data/SOURCES.md) | Card product sourcing and verification dates |
 
-Do not create a second definition of a shared model in another module. Shared domain types live in `engine/models.py`; HTTP wrappers live in `api/schemas.py`; UI view models remain untyped dictionaries received from the API. Proposed contract changes must update `engine/models.py`, `docs/INTEGRATION_CONTRACTS.md`, the owning tests, and every affected module guide in the same change.
+Shared domain types live in `engine/models.py`; HTTP wrappers live in `api/schemas.py`; UI view
+models remain untyped objects received from the API. A contract change updates
+`engine/models.py`, [section D](#d-contracts-and-data-models) below, the owning tests, and every
+affected module guide in the same change — don't let a second definition of a shared model grow
+in another module just to avoid an import.
 
 ## B. Non-negotiable invariants
 
@@ -51,7 +66,7 @@ graph TD
   api --> data
   api --> intent
   api --> explain
-  ui[ui: Streamlit HTTP client] --> api
+  ui[ui: Next.js HTTP client] --> api
   tests[tests] --> engine
   tests --> data
   tests --> intent
@@ -59,390 +74,803 @@ graph TD
   tests --> api
 ```
 
-These arrows are one-way. In particular, `engine` must not import `intent`, `explain`, `api`, `ui`, `eval`, or `data`; `intent` must not call an optimizer; and `explain` must not recompute scores.
+These arrows are one-way and enforced by an AST-walking test, not just convention. In particular,
+`engine` must not import `intent`, `explain`, `api`, `ui`, `eval`, or `data`; `intent` must not
+call an optimizer; and `explain` must not recompute scores.
 
-## D. Parallel ownership
+## D. Contracts and data models
 
-### Implementer A - deterministic product path
+This section is the shared boundary between modules: ownership, canonical semantics, and
+serialized shapes. It is deliberately stricter than a sketch — implementation can evolve
+internally as long as these observable contracts stay stable.
 
-Own `engine/`, `data/`, `explain/`, `api/`, and `ui/` in this order:
+### D1. Contract ownership
 
-1. Shared domain models and weight quantization.
-2. Synthetic Sarah fixtures and loaders.
-3. Scoring, feasibility, and objective composition.
-4. Single-purchase recommendation.
-5. Greedy monthly allocation and structured failures.
-6. Explanation blocks.
-7. FastAPI and Streamlit end-to-end loop.
-8. Exact ILP, sampled strategy frontier, and one what-if.
-
-### Implementer B - language and verification path
-
-Begin after `Goal`, `Constraint`, `Intent`, and parse-result contracts pass their tests. Own `intent/` and `eval/`:
-
-1. Provider protocol, JSON extraction, validation, normalization, and visible fallback.
-2. Seeded latent-intent generation, leak-free split, JSONL assembly, caching, and hashing.
-3. Eval model-runner protocol, frozen probe scenarios, and local metric tests.
-4. Once external access exists: general-model paraphrase generation, Freesolo SFT, real endpoint adapters, frozen three-model evaluation, and report.
-
-There is currently no Freesolo access or general-model API key. Code the provider-independent paths and fixtures now; mark external generation, training, and measured comparisons as blocked rather than fabricating them.
-
-## E. Integration checkpoints
-
-| Gate | Required result | Blocks |
+| Contract | Canonical implementation | Consumers |
 |---|---|---|
-| G0 - scaffold | `pyproject.toml` parses; all package directories and guides exist | All implementation |
-| G1 - contract | Pydantic models validate; weight quantization sums exactly to one million; synthetic scenario loads | Both tracks diverging |
-| G2 - scoring | Pure scoring/objective tests pass; no float in money outputs | Recommendation and allocation |
-| G3 - Chexy core | Recommender, greedy allocator, honest unresolved/infeasible failures, and explanations pass deterministic tests | API/UI |
-| G4 - browser loop | Sarah mortgage and travel stories run through API and Streamlit | Exact-solver work |
-| G5 - exact depth | Tiny ILPs match brute-force; optimal result is no worse than greedy; frontier and what-if pass | Final Chexy submission |
-| G6 - model local | Parser fallback, dataset pipeline, and metric harness pass with fixture providers | External training |
-| G7 - model measured | Frozen trained/base/big-model runs complete with fallback disabled | Freesolo claims |
-| G8 - release | Ruff, full pytest, API smoke, UI smoke, failure-mode review, and demo rehearsal pass | Submission |
+| Card, purchase, bonus, goal, constraints, intent | `engine/models.py` | All modules |
+| Weight quantization and objective utility | `engine/objective.py` | Recommender and allocators |
+| Feasibility and issue codes | `engine/feasibility.py` | Recommender, allocators, API, explain |
+| Optimization results and metrics | `engine/models.py` | Explain, API, eval |
+| Parser metadata and fallback state | `intent/models.py` | API, UI, eval |
+| Explanation blocks | `explain/models.py` | API, UI |
+| HTTP request and response wrappers | `api/schemas.py` | UI and API tests |
+| Public product provenance and synthetic account/scenario documents | `data/models.py` | Data loaders, API, UI, eval |
 
-Integrate at every gate. Do not let either branch accumulate more than one gate of unmerged contract changes.
+### D2. Primitive representations
 
-## F. Reviewed technical corrections
+**Money and value**
 
-The original concept is sound, but the following corrections are required for defensible behavior:
+- Currency is an integer number of cents: `220000` means `$2,200.00`.
+- Point values are integer millicents per point: `1250` means `1.25` cents per point.
+- Rates and utilization are integer basis points: `300` means `3%`; `2750` means `27.50%`.
+- Intent weights enter the engine as integer parts-per-million: `450000` means `45%` of preference weight.
+- Dates serialize as ISO 8601 calendar dates, for example `2026-10-18`.
+- IDs are stable, opaque, nonempty ASCII strings, compared case-sensitively.
+- Display formatting happens only in the explanation/UI layers.
 
-- **Comparable objectives:** raw cents, basis points, days, and risk are not directly comparable. `engine/objective.py` must convert each raw factor into documented integer utility points before applying intent weights.
-- **Aggregate effects:** utilization and bonus completion depend on all purchases assigned to a card. The monthly greedy and ILP objectives must model aggregate card state; they cannot sum static single-purchase penalties and still claim correctness.
-- **Heuristic honesty:** largest-first greedy is not guaranteed to find a plan whenever one exists. A bounded repair pass may recover common dead ends, but failure remains `unresolved` unless an analytical check or exact solver proves infeasibility.
-- **Temporal utilization:** `max_utilization_bps` means a per-card hard ceiling. With `max_utilization_until`, only balances plus planned purchases dated on or before that cutoff count toward this particular ceiling. Full-horizon spend still counts toward the credit limit.
-- **Conservative balance horizon:** the MVP assumes no card payments during the planned month. Statement dates control cashflow timing but do not reset `current_balance_cents`.
-- **Bonus accounting:** projected rewards include a signup bonus only when the threshold is reached by its deadline. Partial progress may affect optimization utility but is never displayed as earned money.
-- **Bonus timing:** deadline eligibility supplies the MVP's temporal behavior. There is no extra continuous "urgency" multiplier, because the available inputs do not justify calibrating one and it would complicate exact parity between Python and ILP objectives.
-- **Fallback honesty:** equal weights with no constraints satisfy the original parser contract but are not financially "safe" in a production-advice sense. The synthetic demo must return `used_fallback=true`, show a warning, and allow manual correction.
-- **Frontier honesty:** a weighted sweep can miss unsupported nondominated integer solutions. Call the output a sampled strategy frontier and state its grid.
-- **Annual fee treatment:** annual fees are portfolio-level sunk costs for this monthly routing problem and are displayed metadata, not assignment objective terms.
+The parser may temporarily use finite decimal/float JSON values because JSON has one number type.
+It must reject `NaN`, infinity, negative values, and an all-zero vector. The exact sequence is:
+provider/API JSON numbers → strict parser/domain validation → normalized interchange `Intent` →
+one conversion in `engine/objective.py` to ppm → integer-only objective and solver arithmetic. No
+parser/provider independently invents ppm fields.
 
-## G. Definition of done
+Every domain Pydantic model uses `ConfigDict(extra="forbid")`. Integer money/rate/day fields use
+`StrictInt` or `Field(strict=True)` so they reject floats, booleans, and numeric strings instead
+of coercing them. Date fields still accept ISO strings from fixture/API JSON. Intent weights are
+the documented numeric-interchange exception and receive explicit finite-number validation.
 
-A judge can load the synthetic Sarah portfolio, enter a goal, inspect parsed weights and hard constraints, plan the month, inspect faithful winner/alternative reasoning, compare sampled nondominated strategies, and reoptimize one rent what-if. The engine uses integer financial arithmetic, every result identifies its solver status, infeasible inputs return structured diagnostics, and external-model outages cannot crash the money path. Model claims come only from a frozen evaluation with named providers and fallback disabled.
+**Rounding**
 
----
+- Reward accrual floors at the final integer division required by the reward rule.
+- Point conversion floors after multiplying accrued points by millicents-per-point.
+- Utilization uses floor division for reporting, but hard feasibility uses cross multiplication to avoid accepting an amount merely because displayed bps rounded down.
+- Weight quantization uses `Decimal(str(value))` and largest remainder so all six ppm values sum exactly to `1_000_000`.
+- Display percentages and dollars may use `Decimal`; they never feed back into optimization.
 
-## Original Product Specification
+### D3. Canonical domain models
 
-The remainder of this file preserves the original feature and narrative specification while correcting stale technical claims that conflict with the reviewed contracts above.
+The examples below are JSON shapes. Python uses Pydantic v2 and string enums.
 
-> **Read the whole relevant section before writing code.** Follow the milestone order. Do not build features that are not listed. When in doubt, prefer correctness and a working end-to-end loop over breadth.
----
-## 0. TL;DR for the implementing agent
-Build two things that connect:
-1. **A deterministic optimization engine** (NOT machine learning) that, given a user's credit cards + weighted financial goals, recommends the best card for a purchase and allocates a month of purchases across cards. This is the **Chexy** track deliverable.
-2. **A small fine-tuned LLM** that parses natural-language goal descriptions into the weight vector + constraints the engine consumes. This is the **Freesolo** track deliverable. It is trained via **SFT on synthetically generated data**.
-The engine is the source of truth for all money math. The LLM only handles language. **The engine also acts as a verifier for the LLM** (see §9, Eval harness). Explanations are **templated from the engine's output**, never generated by an LLM.
-**Hard rules that must hold everywhere:**
-- All money is stored and computed in **integer cents**. Never use floats for currency.
-- All user, account, transaction, bonus-progress, and payment data is **synthetic**. Public card product terms may be sourced from official issuer pages. No real money moves, live credentials, card numbers, or real PII.
-- One trained model only (the intent parser). Explanations are templated.
-- **No reinforcement learning.** SFT only. (RL is a timeline risk; explicitly out of scope.)
----
-## 1. Project framing (for the Devpost writeup and demo narrative)
-**One-sentence pitch:** A personalized payment-strategy engine that decides not just *which* card to use but *why*, optimizing every payment — especially large recurring ones like rent — around each user's financial goals.
-**Target user:** A financially-engaged consumer with 2–5 credit cards who wants to hit a sign-up bonus, protect their credit score before a big application (e.g. a mortgage), or maximize rewards/cash flow — without manually reasoning about statement dates, utilization, and bonus deadlines.
-**Payment problem addressed:** People pick cards by a single crude heuristic ("highest cashback") and ignore utilization impact, statement/due-date float, and time-bound bonus deadlines. Rent (Chexy's core use case) is the largest predictable expense and the biggest lever, but also the easiest to mismanage.
-**Relationship to Chexy's mission:** Chexy lets users pay rent (and recurring bills) by card. This project is the intelligence layer on top: it tells the user how to route rent + everyday spend across their cards to hit their actual goals. It demonstrates a full workflow using sourced public product rules plus synthetic accounts and purchases.
-**Differentiation (lead with these; the single-card picker is commodity):**
-- Multi-card **monthly allocation** under real constraints (limits, utilization targets, bonus thresholds, statement timing).
-- **Cash-flow / float** optimization via statement-close and due-date timing.
-- **Temporal constraints**: bonus deadlines and "keep utilization low until date X" are constraints over time, not a static score.
-- **Sampled strategy frontier**: instead of one answer, surface sampled non-dominated plans (e.g. "max cashback but medium credit impact" vs "balanced" vs "best utilization") and make the tradeoff explicit. This is a defensible way to present a multi-objective problem; disclose the bounded weight grid and treat it as a signature feature.
----
-## 2. Architecture
+**RewardRule**
+
+```json
+{ "category": "groceries", "rate_bps": 400, "reward_type": "points" }
 ```
-                 ┌─────────────────────────────────────────────┐
-   NL goal  ───► │  INTENT PARSER (fine-tuned small LLM)        │
-  "hit my Amex   │  natural language → { weights, constraints } │
-   bonus but     └───────────────────┬─────────────────────────┘
-   keep score                        │  structured intent (JSON)
-   safe for a                        ▼
-   March          ┌─────────────────────────────────────────────┐
-   mortgage"      │  OPTIMIZATION ENGINE (deterministic solver)  │
-                  │  - single-purchase recommender               │
-   card data ───► │  - monthly allocation (greedy baseline →     │
-   purchases ───► │    ILP upgrade), integer-cents money math    │
-                  │  - sampled strategy frontier (weight sweep) │
-                  └───────────────────┬─────────────────────────┘
-                                      │  solution(s) + factor contributions
-                                      ▼
-                  ┌─────────────────────────────────────────────┐
-                  │  EXPLANATION LAYER (templated, not an LLM)   │
-                  │  solver trace → decision-score cards         │
-                  └───────────────────┬─────────────────────────┘
-                                      ▼
-                                  UI / demo
+
+`category` is normalized lowercase snake case. `rate_bps` is nonnegative. `reward_type` is one of
+`cashback`, `points`, or `miles`. A card cannot contain duplicate rule categories. The first exact
+category match is used; if none matches, `base_rate_bps` and the card's `base_reward_type` are
+used. A rule for `other` is ordinary category data, not a second fallback mechanism.
+
+**SignupBonus**
+
+```json
+{ "spend_required_cents": 400000, "spend_so_far_cents": 125000, "reward_value_cents": 60000, "deadline_date": "2026-10-31" }
 ```
-**Why the engine is deterministic, not ML:** the "reward earned on purchase X with card Y" is a *calculation*, not a *prediction*. There is no need for training data, and a learned approximation of a solver is strictly less correct — a liability on a financial-correctness track. To get ML training labels you would need the correct answer per scenario, which requires a solver anyway → circular. So: solver for math, LLM for language only.
-**The verifier thread (ties both tracks together):** feed the LLM's predicted weights into the solver; check whether the solver's top recommendation matches the one produced by the *gold* weights. This "downstream match" is the headline eval metric and lets the solver double as a checker of the model.
----
-## 3. Tech stack
-- **Language:** Python 3.11+.
-- **Solver:** `PuLP` with CBC for the ILP. CBC is normally included in supported PuLP distributions, but startup must health-check it. Greedy + local-search remains the verified fallback, and the writeup/UI must state the optimality tradeoff.
-- **API layer:** `FastAPI` + `uvicorn`.
-- **Data validation:** `pydantic` v2 (also gives clean JSON schemas for the LLM output contract).
-- **Frontend:** minimal is fine. Option A (fastest): a single-page `Streamlit` app. Option B: a small React/Vite front end if a team member owns it. Do not let the UI eat solver/model time.
-- **LLM training:** Freesolo's post-training platform (they provide infinite training credits during the event). SFT only.
-- **Model inference for data generation:** a strong general model (via API) is used *offline*, only to synthesize training data and to spot-check — never in the live money path.
-- **Testing:** `pytest`.
-Keep everything in one repo. Suggested layout:
+
+All values are nonnegative. `spend_so_far_cents` may exceed the requirement in imported data; the
+engine clamps remaining spend to zero without changing source data. Planned purchases count only
+when their date is on or before the deadline. Every purchase category is treated as
+bonus-eligible.
+
+**Card**
+
+```json
+{
+  "id": "summit-journey", "name": "Summit Journey (synthetic)",
+  "credit_limit_cents": 1200000, "current_balance_cents": 85000,
+  "reward_rules": [], "base_rate_bps": 100, "base_reward_type": "points",
+  "point_value_millicents": 1250, "annual_fee_cents": 9500,
+  "statement_day": 12, "due_day": 7, "signup_bonus": null
+}
 ```
-/engine        # deterministic solver + money math + data models
-/intent        # LLM: data generation, training config, inference wrapper
-/explain       # templated explanation layer
-/api           # FastAPI app wiring engine + intent + explain
-/ui            # streamlit or react
-/data          # sourced product catalog + synthetic scenarios/training data
-/eval          # eval harness + reports
-/tests
-README.md
+
+Limits, balances, rates, values, and fees are nonnegative integers. A zero-limit card validates as
+input but is infeasible for new purchases. `statement_day` and `due_day` are between 1 and 28
+inclusive. `current_balance_cents` greater than the limit is valid imported state but makes new
+assignments infeasible and produces an issue. `point_value_millicents` is used only for
+point/mile rules — cashback already represents cents. `annual_fee_cents` is metadata and a
+disclosed sunk-cost assumption, not a monthly assignment factor.
+
+**Purchase**
+
+```json
+{ "id": "rent-2026-08", "amount_cents": 220000, "category": "rent", "date": "2026-08-01", "is_recurring": true, "locked_card_id": null }
 ```
----
-## 4. Data models (define these first, in `/engine/models.py`)
-All monetary fields are **integer cents**. All rates are stored as integers in **basis points** (1% = 100 bps) to avoid float drift; convert only at display time.
-```python
-# pydantic v2 models
-class RewardRule:
-    category: str            # "rent", "groceries", "travel", "dining", "other", ...
-    rate_bps: int            # reward rate in basis points (e.g. 3% -> 300)
-    reward_type: str         # "cashback" | "points" | "miles"
-class Card:
-    id: str
-    name: str                # e.g. "Aurora Bonus (synthetic)"
-    credit_limit_cents: int
-    current_balance_cents: int          # already-charged this cycle
-    reward_rules: list[RewardRule]      # first matching category applies; else "other"/base
-    base_rate_bps: int                  # fallback reward rate
-    base_reward_type: str               # "cashback" | "points" | "miles"
-    point_value_millicents: int         # value of 1 point/mile, in millicents (1 cent = 1000). static table.
-    annual_fee_cents: int
-    statement_day: int                  # day of month statement closes (1-28)
-    due_day: int                        # day of month payment due (1-28)
-    signup_bonus: SignupBonus | None
-class SignupBonus:
-    spend_required_cents: int           # spend needed within the window
-    spend_so_far_cents: int
-    reward_value_cents: int             # value of the bonus if hit
-    deadline_date: date                 # must hit by this date
-class Purchase:
-    id: str
-    amount_cents: int
-    category: str
-    date: date                          # when it will be charged
-    is_recurring: bool                  # rent flag → highlight in UI
-    locked_card_id: str | None          # user pinned this purchase to a card (constraint)
-class Goal(str, Enum):
-    MAX_CASHBACK = "max_cashback"
-    MAX_TRAVEL   = "max_travel"
-    CREDIT_HEALTH = "credit_health"     # keep utilization low
-    HIT_SIGNUP_BONUS = "hit_signup_bonus"
-    MAX_CASHFLOW = "max_cashflow"       # exploit statement/due float
-    MIN_RISK = "min_risk"
-class Constraint:
-    # temporal / hard constraints parsed from NL or set in UI
-    max_utilization_bps: int | None = None        # per-card ceiling, e.g. <= 30%
-    max_utilization_until: date | None = None      # applies until this date (e.g. mortgage app)
-    must_hit_bonus_card_ids: list[str] = Field(default_factory=list)
-class Intent:
-    # THE contract between the LLM and the engine
-    weights: dict[Goal, float]          # finite/nonnegative; normalized at validation
-    constraints: Constraint
+
+Amount must be a positive integer. Category normalization matches reward-rule normalization.
+Purchase IDs are unique inside a request. A lock references a card in the same request; unknown
+locks produce structured infeasibility, not a low-level key error. Purchases are indivisible —
+never split across cards.
+
+**Goal and Intent**
+
+The six and only six goal keys: `max_cashback`, `max_travel`, `credit_health`,
+`hit_signup_bonus`, `max_cashflow`, `min_risk`.
+
+```json
+{
+  "weights": { "max_cashback": 0.10, "max_travel": 0.10, "credit_health": 0.45,
+               "hit_signup_bonus": 0.25, "max_cashflow": 0.05, "min_risk": 0.05 },
+  "constraints": { "max_utilization_bps": 3000, "max_utilization_until": "2026-11-01",
+                    "must_hit_bonus_card_ids": ["harbor-bonus"] }
+}
 ```
-**`Intent` is the single interface** between the model and the solver. The LLM's only job is to emit valid `Intent` JSON. Validate it with Pydantic; if invalid and runtime fallback is enabled, use equal weights/no constraints, set `used_fallback=true`, and surface a warning. This is an operational demo fallback, not personalized "safe" advice. Evaluation never uses fallback.
----
-## 5. Scoring functions (in `/engine/scoring.py`)
-Each is a **pure, deterministic** function returning integer cents (or an integer score) so contributions are auditable and explainable. These are the per-dimension factors the objective combines.
-- `reward_value_cents(card, purchase) -> int`
-  Match purchase category to a `RewardRule` (else base rate). If cashback: `amount_cents * rate_bps // 10000`. If points/miles: `points = amount_cents * rate_bps // 10000`, then `value = points * point_value_millicents // 1000`. Integer math throughout.
-- `utilization_after(card, extra_cents) -> int` (returns bps)
-  `(current_balance_cents + extra_cents) * 10000 // credit_limit_cents`. Guard divide-by-zero (limit 0 → treat as maxed / infeasible).
-- `utilization_penalty(util_bps) -> int`
-  Convex piecewise-linear penalty rising above 30% (3000 bps), with nondecreasing integer slopes shared by Python and the ILP. Encodes the credit-health goal as a soft cost.
-- `signup_bonus_progress_value(card, purchase) -> int`
-  Marginal value of qualifying spend toward an unmet bonus, capped at the remaining threshold. Only purchases on/before the deadline count. Partial progress receives a configured minority of bonus utility; the rest appears only on completion. There is no separate urgency multiplier.
-- `cashflow_value(card, purchase) -> int`
-  Days of interest-free float gained = days from `purchase.date` to that card's payment due date given its statement cycle. Convert days to a small cents-equivalent with a configurable annual carrying rate and integer arithmetic.
-- `risk_penalty(card, extra_cents) -> int`
-  Soft incremental headroom penalty for leaving too little available capacity. Hard limit/ceiling violations are removed by shared feasibility checks, never approximated by a large penalty.
-> Keep typed raw factor and plan/card summary models. Additive purchase factors and aggregate utilization/risk/bonus factors remain separate so monthly explanations and ILP coefficients stay correct.
----
-## 6. The optimization engine (in `/engine/optimize.py`)
-### 6a. Single-purchase recommender (warm-up, ~2 hrs)
-For one purchase, for each feasible card compute a weighted score:
+
+All six keys are present after parser normalization. Every value is finite and nonnegative, and
+the vector contains at least one positive value. `Intent` normalizes values for ergonomic API
+interchange; `objective.py` alone produces canonical ppm immediately before any
+recommendation/allocation scoring. `max_utilization_bps` is absent or between `0` and `10000`.
+`max_utilization_until` requires `max_utilization_bps`; a ceiling without a date applies to the
+full planning horizon. `must_hit_bonus_card_ids` is unique and stable-sorted after validation, and
+request-level validation checks that forced-bonus IDs exist and have bonuses.
+
+`max_utilization_bps` is a per-card ceiling, not portfolio-wide utilization — total portfolio
+utilization does not change when a fixed total purchase amount moves among cards, so per-card
+concentration is the meaningful assignment constraint.
+
+### D4. Raw factors and objective utility
+
+Every candidate or assignment exposes raw facts separately from utility contributions.
+
+```json
+{
+  "cashback_cents": 0, "travel_value_cents": 3300,
+  "signup_eligible_spend_cents": 220000, "signup_progress_cents": 220000,
+  "signup_bonus_earned_cents": 0, "signup_goal_points": 30000,
+  "cashflow_days": 37, "cashflow_value_cents": 111,
+  "utilization_before_bps": 708, "utilization_after_bps": 2541,
+  "credit_penalty_points": 0, "risk_penalty_points": 0
+}
 ```
-score(card) =  w_cashback   * reward_value_cents
-             + w_travel     * travel_reward_value_cents
-             + w_signup     * signup_bonus_progress_value
-             + w_cashflow   * cashflow_value
-             - w_credit     * utilization_penalty
-             - w_risk       * risk_penalty
+
+Raw fields are exact under documented assumptions. `signup_progress_cents` is spend progress, not
+reward money; `signup_bonus_earned_cents` is nonzero only if the evaluated plan reaches the
+threshold by the deadline.
+
+```json
+{
+  "utility_by_goal": { "max_cashback": 0, "max_travel": 82500000, "credit_health": -12000000,
+                        "hit_signup_bonus": 30000000, "max_cashflow": 2775000, "min_risk": 0 },
+  "total_utility": 103275000
+}
 ```
-Drop any card that violates a hard constraint (over limit, breaches active utilization ceiling, locked to a different purchase). Return the argmax **plus the full factor breakdown** for the winner and the runner-up (needed for "why not the other card" explanations). This is the warm-up, not the centerpiece.
-### 6b. Monthly multi-card allocation (the centerpiece, ~½–1 day)
-**This is where the technical depth lives. Prioritize it.**
-Problem: assign each of N purchases in the month to one of M cards to maximize total weighted objective, subject to constraints.
-**Build in two stages, in this order — do not skip the first:**
-**Stage 1 - greedy baseline (build this first, ~1-2 hrs).** Place locked purchases first, then remaining purchases largest-first. Assign each to the best marginal card under the current aggregate plan state, run bounded relocation repair if a step dead-ends, then run deterministic relocation/swap improvement passes. This is the shippable heuristic path for the curated Sarah scenario, but it is not complete: a failed search is `unresolved` unless an analytical check proves infeasibility.
-**Stage 2 - ILP upgrade (layer on top once Stage 1 works, ~half day).** Re-solve the same aggregate objective as an exact integer program. Claim optimality only when CBC returns an optimal status. On timeout/error, return the independently verified greedy result as `heuristic_fallback`; do not label a CBC incumbent optimal.
-> Why both, and why this order: greedy establishes a testable end-to-end product path before exact-solver work. The ILP then adds a proof-producing result and makes sampled strategy sweeps practical. The default demo scenario is tested to succeed through both paths; arbitrary heuristic inputs may still be unresolved.
-The **ILP formulation** (PuLP, CBC backend):
-- **Decision variables:** `x[p][c] ∈ {0,1}` — purchase `p` assigned to card `c`.
-- **Assignment constraint:** every purchase goes to exactly one card: `sum_c x[p][c] == 1` for all `p`. (Assume one card per purchase; do not split a single purchase across cards — keep it tractable and realistic.)
-- **Locked purchases:** if `purchase.locked_card_id` set, force `x[p][that_card] == 1`.
-- **Credit-limit constraint (hard):** for each card, `current_balance + sum_p (x[p][c] * amount_p) <= credit_limit`.
-- **Utilization ceiling (hard, if active):** constrain current balance plus charges dated on/before `max_utilization_until`; without a cutoff, constrain the full planning horizon. Use exact cross multiplication, independent of statement timing.
-- **Bonus threshold (soft or hard):** model deadline-eligible assigned spend, capped progress, and a binary threshold indicator with exact linking constraints. Add partial-progress and completion utility without counting either as earned money. Force the indicator for IDs in `must_hit_bonus_card_ids`.
-- **Objective:** precompute only additive purchase/card reward and cashflow coefficients. Model aggregate utilization, risk headroom, capped bonus progress, and bonus completion with card-level variables using the same integer functions/configuration as the Python evaluator. **Weights come from the quantized `Intent`.**
-Return: the assignment map, total projected reward, resulting per-card utilization, bonus progress, and a per-purchase factor breakdown.
-**Explicitly document hard vs soft:** credit limits and active utilization ceilings and forced bonuses are **hard constraints**; reward/cashflow/general-utilization-preference are **objective terms**. Being able to state this cleanly is a scoring point.
-### 6c. Sampled strategy frontier (signature feature, ~2-3 hrs on top of 6b)
-Instead of collapsing everything into one weighted answer, surface the non-dominated allocations found by a coarse weight sweep so the user sees real sampled tradeoffs. A plan A *dominates* plan B over the swept goals if A is at least as good on every corresponding unweighted metric and strictly better on at least one. Weighted sweeps can miss unsupported nondominated integer allocations, so this is never presented as the complete mathematical frontier.
-**How to generate it (cheap once 6b exists):**
-1. Sweep a grid of weightings across the objectives the user said they care about (for a 2-objective case like cashback-vs-credit-health, step the weight from all-A to all-B in ~5–9 increments; for 3 objectives use a coarse simplex grid). Re-solve the allocation at each point. This is just calling 6b in a loop — trivial with the ILP, workable with the greedy baseline too.
-2. For each resulting plan, record the unweighted metric corresponding to each swept goal (cashback cents, travel-value cents, credit penalty points, signup goal points, cashflow value cents, or risk penalty points) - **not** the blended score.
-3. Discard dominated sampled plans; keep the sampled frontier. De-duplicate identical allocations.
-4. Return 3–5 representative frontier points with human labels ("Max cashback", "Balanced", "Best credit health") derived from which objective each point favors.
-**Presentation:** a small table or 2-axis scatter with sampled nondominated points, each expandable into its allocation and explanation. Always state how many weight settings were attempted and that other nondominated allocations may exist.
-**Scope guard:** cap the grid resolution so the sweep stays fast (a few seconds). Do not attempt a full high-dimensional frontier across all six objectives at once — pick the 2–3 the user actually weighted and sweep those. This is a stretch feature: build it only after 6b and the explanation layer work end-to-end.
-### 6d. What-if (cheap, high demo value)
-`what_if(base_scenario, override) -> diff`: re-run 6a/6b with one purchase's card changed (e.g. "put rent on Card B instead") and return the delta in reward, utilization, and bonus progress. This is just two solver calls and a diff — include exactly one "what-if" in the demo, no more.
+
+These values are integer comparison units, not cents and not user-facing money:
+$U_g = w_g^{ppm} \times f_g(raw, config)$. The common factor of one million does not need to be
+divided out for ranking. Calibration functions and constants live in `engine/config.py`; both
+greedy and ILP implementations use the same configuration.
+
+| Goal | Positive signal | Negative signal |
+|---|---|---|
+| `max_cashback` | Cashback cents | None |
+| `max_travel` | Static cents value of points/miles | None |
+| `credit_health` | None | Convex aggregate per-card utilization penalty |
+| `hit_signup_bonus` | Capped progress utility plus earned bonus value | None |
+| `max_cashflow` | Carry-value cents and reported float days | None |
+| `min_risk` | None | Near-limit headroom penalty; never duplicates a hard violation |
+
+Hard violations are excluded before scoring — a huge risk penalty is not a substitute for a
+constraint.
+
+### D5. Feasibility contract
+
+The shared analyzer receives cards, purchases, constraints, and optionally a proposed assignment
+map. It returns issues and per-card slack; the optimizer does not duplicate these rules. Checks
+run in this order so diagnostics are deterministic:
+
+1. Duplicate IDs and unknown card references.
+2. Locked purchase validity.
+3. Individual purchase capacity.
+4. Full-horizon card credit limits.
+5. Active dated or full-horizon per-card utilization ceilings.
+6. Forced bonus existence, deadline eligibility, available eligible spend, and capacity.
+
+For a dated utilization ceiling:
+
+$$10000 \times (current\ balance + eligible\ assigned\ spend) \leq max\ utilization\ bps \times credit\ limit$$
+
+This cross-multiplied comparison is exact. Eligibility is inclusive:
+`purchase.date <= max_utilization_until`. If no purchase in the evaluated horizon is on/before the
+cutoff, that dated ceiling is inactive for routing; all assigned spend still remains subject to
+the full credit limit. A ceiling without a cutoff applies to the full horizon.
+
+**Stable issue codes**
+
+| Code | Meaning |
+|---|---|
+| `duplicate_id` | Duplicate card or purchase ID |
+| `unknown_locked_card` | Purchase lock references an absent card |
+| `unknown_purchase` | What-if or assignment input references an absent purchase |
+| `unknown_assigned_card` | Assignment references an absent card |
+| `missing_assignment` | A purchase has no assignment entry |
+| `purchase_locked_to_other_card` | Assignment/candidate conflicts with a valid purchase lock |
+| `unknown_bonus_card` | Forced bonus references an absent card |
+| `card_has_no_bonus` | Forced card has no signup bonus |
+| `zero_credit_limit` | Card cannot accept spend |
+| `card_already_over_limit` | Imported balance is already above limit |
+| `purchase_exceeds_capacity` | One purchase cannot fit a required/available card |
+| `credit_limit_exceeded` | Proposed aggregate spend exceeds a card limit |
+| `utilization_ceiling_exceeded` | Proposed dated/full-horizon spend breaches the ceiling |
+| `bonus_deadline_passed` | A forced bonus cannot receive eligible planned spend |
+| `bonus_target_unreachable` | Eligible purchases/capacity cannot satisfy forced remaining spend |
+| `no_feasible_assignment` | No complete indivisible assignment exists |
+| `heuristic_dead_end` | Greedy and bounded repair did not find a complete plan; feasibility is unproven |
+| `solver_timeout` | Exact solve did not finish in the configured limit |
+| `solver_error` | Exact solver failed unexpectedly |
+
+Normal exact solves are isolated behind a caller-side wall-clock watchdog. The configured limit is
+1–60 seconds; timeout or native worker failure cannot block the API indefinitely and returns an
+honestly labeled greedy fallback when available. Sampled-frontier solves inherit the smaller
+remaining total frontier budget. Every issue contains `code`, `message`, affected card/purchase
+IDs, optional integer `actual`, optional integer `required`, and a concrete `suggestion`.
+
+### D6. Optimization results
+
+`status` is one of:
+
+- `optimal` — complete single-purchase enumeration or CBC proved the modeled optimum.
+- `heuristic` — requested greedy/local-search result.
+- `heuristic_fallback` — greedy result returned because exact solving timed out or errored.
+- `infeasible` — enumeration, an analytical contradiction, or CBC proved no complete assignment satisfies all hard constraints.
+- `unresolved` — a heuristic failed to complete an assignment and no infeasibility proof is available.
+
+`solver_method` is `single_purchase`, `greedy`, or `ilp`. An ILP request that falls back reports
+`solver_method=greedy`, `status=heuristic_fallback`, and includes the exact-solver issue.
+
+For a monthly plan, `alternatives` are computed by the optimizer against the final complete
+assignment: move this one purchase to another card, keep all other assignments fixed, and
+recompute feasibility and aggregate metrics. Feasible alternatives sort by descending resulting
+plan utility then card ID; infeasible alternatives follow in card-ID order with issue codes. The
+explanation layer consumes these values and never reconstructs a stateless comparison.
+
+Monthly `PurchaseAssignment.raw_factors` contains additive reward/cashflow facts and the card's
+final ending utilization for context. Aggregate signup progress/completion and credit/risk
+penalties remain in card summaries and allocation metrics rather than being arbitrarily attributed
+to individual purchases — per-purchase objective contributions do not sum to the plan objective;
+the plan objective is authoritative. `utilization_slack_cents` is null when no hard utilization
+ceiling applies; zero means binding.
+
+For `infeasible` or `unresolved`, assignment and summary lists are empty and issues are nonempty.
+`projected_reward_value_cents` equals cashback plus static travel value plus signup bonuses
+actually reached — it does not include signup progress utility or cashflow carrying value.
+
+**Sampled frontier.** Frontier metadata distinguishes `active_goal_ids` (all goals with positive
+original weight) from `swept_goal_ids` (the top two or three actually varied). Dominance compares
+one unweighted, direction-aware metric per swept goal only — never blended total utility, and
+never claims coverage over non-swept goals:
+
+| Goal | Frontier metric | Direction |
+|---|---|---|
+| `max_cashback` | `cashback_cents` | Maximize |
+| `max_travel` | `travel_value_cents` | Maximize |
+| `credit_health` | `credit_penalty_points` | Minimize |
+| `hit_signup_bonus` | `signup_goal_points` | Maximize |
+| `max_cashflow` | `cashflow_value_cents` | Maximize |
+| `min_risk` | `risk_penalty_points` | Minimize |
+
+**Single-purchase recommendation.** The result contains `winner`, optional `runner_up`, all
+feasible ranked candidates, excluded cards with issue codes, and warnings. If no card is feasible,
+status is `infeasible` and winner is null. Locked purchases evaluate only the locked card while
+still returning why invalid alternatives were excluded.
+
+### D7. Parser contract
+
+The provider boundary returns raw text; it never constructs engine objects directly:
+`IntentProvider.generate(text, reference_date) -> ProviderResponse`. `ProviderResponse` contains
+raw output, provider name, model ID, latency, and optional request metadata — it never stores an
+API key.
+
+Post-processing, in order: extract one JSON object (including from a fenced response) → parse
+without permissive `NaN` support → map known goal keys, reject unknown constraint fields → fill
+omitted goal keys with zero → validate constraints and all numeric values → normalize positive
+weights and create `Intent` → return source metadata and warnings.
+
+On terminal failure, demo mode creates equal importance by assigning `1.0` to each goal before
+normalizing and returns no constraints with `used_fallback=true`. Canonical engine ppm becomes
+`166667` for the first four goals in enum order and `166666` for the last two, totaling exactly
+`1_000_000`. Eval mode raises a typed parse failure so invalid-JSON rate remains measurable.
+Relative dates are never guessed in post-processing; prompts include `reference_date` and require
+absolute ISO output.
+
+### D8. Explanation contract
+
+The explanation builder consumes only optimization results, cards, purchases, and intent — it
+does not import scoring helpers. Structured output includes a headline with chosen card and
+purchase/plan context; positive and caution factor lines with machine-readable factor kind; raw
+amount, unit, formatted text, and source field for every line; an alternative comparison
+identifying the next feasible card or explaining exclusion; binding and near-binding constraint
+lines based on engine-provided slack; and solver-status disclosure and warnings. The builder must
+never say a partial signup progress amount was earned, attach confidence to deterministic math, or
+describe a heuristic result as optimal.
+
+### D9. API contract
+
+All endpoints return HTTP 200 for valid requests even when the domain result is infeasible.
+FastAPI uses 422 for malformed request structure and 503 only when an explicitly required external
+provider is unavailable and fallback is disabled.
+
+| Endpoint | Request | Response payload |
+|---|---|---|
+| `GET /demo-scenario` | none | Sarah's synthetic scenario and named manual intent presets |
+| `POST /parse-intent` | text, required reference date, card context/scenario, optional allowed provider | Parse result with intent/source/warnings |
+| `POST /recommend` | cards, purchase, intent | Recommendation plus explanation |
+| `POST /allocate` | cards, purchases, intent, solver preference | Allocation plus explanation blocks |
+| `POST /frontier` | cards, purchases, intent, max points | Sampled frontier metadata and plans |
+| `POST /what-if` | base scenario, purchase ID, override card ID, solver preference | Base/override summaries and integer deltas |
+| `GET /health` | none | Process, fixture, solver, and provider readiness |
+
+Every response uses a top-level envelope: `{"schema_version": "1.0", "data": <endpoint payload>, "warnings": []}`.
+Domain warnings may also remain inside a result when tied to that result; envelope warnings
+describe orchestration/provider behavior. Deterministic endpoints do not add random IDs or
+timestamps, so equal inputs canonicalize to byte-for-byte equal JSON.
+
+### D10. Evaluation contract
+
+Evaluation never uses parser fallback. Each model runner is named and produces cached raw
+responses; all runners receive the same system contract, reference date, and held-out examples.
+
+Headline downstream match uses a fixed suite of single-purchase probes spanning rent, grocery,
+dining, and travel. For each held-out intent, compare the card selected from predicted intent
+against the card selected from gold intent, and report monthly per-purchase assignment agreement
+separately rather than collapsing it into the headline metric. Required report columns: valid
+JSON/schema rate, six-goal macro mean absolute error, constraint field exact match and per-field
+precision/recall/F1, downstream top-card match with bootstrap 95% interval, monthly assignment
+agreement, and provider/model identity, sample count, dataset hash, prompt version, and fallback
+count (must be zero).
+
+### D11. Determinism rules
+
+- Input lists are canonicalized by stable IDs before tie-breaking.
+- Recommendation ties prefer lexicographically smaller card IDs.
+- Greedy ordering is locked purchases first, then descending amount, then purchase ID.
+- Local search scans purchase IDs then card IDs in stable order and accepts only strict utility improvement.
+- ILP multiplies primary utility by a proven bound larger than the complete secondary tie score before adding deterministic tie coefficients. The implementation asserts the resulting coefficient/objective bound is below `2**53` for CBC's numeric representation under accepted inputs; otherwise it uses a two-pass primary-then-secondary solve or returns a typed solver error rather than silently risking a changed primary optimum.
+- Frontier assignment keys sort `(purchase_id, card_id)` pairs.
+- Synthetic generation and bootstrap evaluation require explicit seeds.
+
 ---
-## 7. Financial correctness & failure modes (in `/engine/` + tests; REQUIRED by track rule #6)
-The track explicitly asks for privacy/security/reliability/financial-correctness/error-handling/failure-mode reasoning. Most teams skip this — it's cheap points. Implement and be ready to talk about:
-- **Integer cents everywhere.** Add a test that asserts no float appears in money paths. Rounding is explicit and documented (floor on reward accrual).
-- **Divide-by-zero / zero-limit cards** → treated as infeasible, not a crash.
-- **Purchase exceeds every card's limit** → return a clear "no feasible single-card assignment" result, suggest which constraint to relax; never throw to the UI.
-- **Infeasible ILP** (constraints conflict, e.g. two hard bonuses that can't both be met within limits) → detect `LpStatusInfeasible`, return a structured explanation of which constraints collided + a suggested relaxation. Do not crash.
-- **Conflicting goals** (e.g. max-cashback vs credit-health) → the weighted objective resolves them; the explanation must name the tension and which side won.
-- **Uncertain point valuations** → use a **static** cents-per-point table (documented assumption). Do NOT model award availability or dynamic redemptions — explicit non-goal.
-- **LLM output invalid** -> Pydantic validation fails -> when runtime fallback is enabled, return the visibly labeled equal-weight/no-constraint fallback. The money path never trusts raw or invalid model output; evaluation disables fallback.
-- **Privacy/security:** all persona/account/transaction state is synthetic; public product terms are sourced and timestamped; no credentials, card numbers, or real PII are collected; state stays local/in-memory. Say this explicitly in the writeup.
-Write a short `FAILURE_MODES.md` capturing the above — it doubles as demo talking points and satisfies rule #6.
+
+## E. Design rationale
+
+This section records the reasoning behind decisions that are easy for independent readers (or
+future contributors) to interpret differently, so every simplification stays explicit and
+internally consistent.
+
+### E1. Executive verdict
+
+The central architecture is sound:
+
+- Reward accrual, balance capacity, utilization, deadlines, and payment timing are deterministic calculations and belong in code/optimization, not ML.
+- Natural-language intent is uncertain and belongs behind a validated model boundary.
+- A solver can evaluate whether parser error changes an actual decision, making downstream match a useful task metric.
+- Structured templates are more faithful than generated prose for financial explanations.
+- Monthly allocation is a more differentiated deliverable than a single-card recommendation.
+
+Five areas needed correction before an exactness claim was defensible, and the design below
+resolves all five without invalidating the core idea: objective values used incompatible units
+without calibration; static per-purchase ILP coefficients could not represent aggregate
+utilization or all-or-nothing bonus completion; a greedy allocator was described as guaranteed
+even though greedy search can dead-end on a feasible instance; a weighted sweep was described as
+the Pareto frontier even though it samples only supported solutions and may miss integer frontier
+points; and temporal balance behavior was under-specified relative to statement dates.
+
+### E2. Decision table
+
+| ID | Question | Decision | Reason |
+|---|---|---|---|
+| D001 | Are reward calculations learned? | No; pure integer functions | Rates and balances are known inputs, not predictions |
+| D002 | What may the LLM output? | Only `Intent` weights and hard constraints | Keeps uncertain language outside the money path |
+| D003 | What numeric form do intent weights use in the engine? | Integer ppm summing to `1_000_000` | Prevents float propagation and gives deterministic ties |
+| D004 | How are different objectives compared? | Raw facts map to documented integer utility, then weights apply | Cents, bps, and days are not directly commensurate |
+| D005 | What does utilization ceiling mean? | Per-card hard ceiling | Overall utilization is invariant to routing a fixed spend total |
+| D006 | Do statements reset balances? | No | Payments and historical ledger are absent; pretending to reset would be less correct |
+| D007 | What do statement dates affect? | Interest-free float calculation only | This is supportable from the available fields |
+| D008 | Are annual fees part of routing? | No; display as sunk portfolio metadata | The month cannot avoid a fee on a card the user already holds |
+| D009 | When is a signup bonus displayed as reward? | Only when the plan reaches it by the deadline | Partial progress is not earned money |
+| D010 | Can partial bonus progress influence routing? | Yes, through a capped 20% utility pool | Prevents zero incentive until the threshold while limiting double counting |
+| D011 | Is greedy failure proof of infeasibility? | No; return `unresolved` absent proof | Heuristic completeness is not guaranteed |
+| D012 | When can the product say optimal? | Enumeration for one purchase or CBC optimal status | Honest claim tied to a proof-producing method |
+| D013 | What is the frontier? | A sampled strategy frontier with exact dominance filtering over sampled plans | Weighted sweeps can miss nondominated integer solutions |
+| D014 | What is parser fallback? | Equal weights/no constraints plus visible warning | Matches the original contract; manual correction keeps it honest |
+| D015 | Does eval permit fallback? | Never | Otherwise model attribution and valid-output rates are corrupted |
+| D016 | Does the UI calculate scores? | Never | Prevents drift from engine behavior |
+| D017 | Can one purchase be split? | No | Matches real card routing and keeps the assignment model tractable |
+| D018 | Are point values dynamic? | No; static per synthetic card | Award inventory and redemption modeling are explicit non-goals |
+| D019 | Does bonus value receive a continuous deadline-urgency multiplier? | No | Deadline eligibility and completion already provide temporal behavior; an extra curve is uncalibrated and complicates exact ILP parity |
+| D020 | Where are intent weights quantized? | `engine/objective.py`, once | Parser/domain validation owns interchange normalization; optimizer owns ppm arithmetic |
+
+### E3. Objective soundness
+
+Consider a reward of `4,400` cents, an ending utilization of `3,400` bps, and `35` float days.
+Multiplying each directly by a user weight implies a basis point, a cent, and a day share the same
+scale — a small numerical change in one factor could overwhelm a high stated weight in another.
+The engine therefore keeps two layers: **raw facts** (exact cents, bps, spend progress, days used
+for metrics and explanations) and **utility points** (integer, documented calibration outputs used
+only for ranking and solving).
+
+Default calibration: cashback and travel each earn 1 utility point per value cent; cashflow earns
+1 utility point per carrying-value cent at 500 annual bps; signup progress earns up to 20% of
+bonus value proportional to remaining spend completed, with the remaining 80% on-time completion;
+credit health has no incremental penalty through 30% utilization, then convex slopes per bps
+across 30–50%, 50–75%, 75–100%, and above 100% imported state; minimum risk penalizes ending
+credit headroom shortfall below a configured reserve, one-for-one in cents. These slopes are
+reviewable defaults calibrated against the Sarah scenario, not universal truths or validated
+financial advice — snapshot tests protect them from accidental drift.
+
+Cashback, travel value, and cashflow are additive by purchase-card pair. Utilization penalty, risk
+headroom, and bonus completion are aggregate by card:
+
+$$U(plan) = \sum_{p,c} x_{p,c} U_{additive}(p,c) - \sum_c U_{util}(ending_c) - \sum_c U_{risk}(ending_c) + \sum_c U_{bonus}(eligibleSpend_c)$$
+
+Greedy candidate selection calculates the change in this plan-level utility when a purchase moves;
+the ILP introduces aggregate variables for the nonlinear pieces. Reusing a static
+`factor_breakdown(card, purchase)` as the entire monthly coefficient would be simpler but
+logically wrong.
+
+### E4. Financial arithmetic
+
+**Rewards.** Cashback: $rewardCents = \lfloor amountCents \times rateBps / 10000 \rfloor$. Points:
+$points = \lfloor amountCents \times rateBps / 10000 \rfloor$, then
+$valueCents = \lfloor points \times pointValueMillicents / 1000 \rfloor$ — `300` bps means 3
+points per dollar for a point rule.
+
+**Utilization.** Reported utilization may floor to integer bps, but hard feasibility uses cross
+multiplication rather than the floored display value. A zero-limit card is valid input for
+diagnostics but infeasible for new spend. Aggregate portfolio utilization after assigning a fixed
+set of purchases is $(\sum balances + \sum purchases) / \sum limits$ and does not change based on
+which card receives each purchase — useful display context, but it cannot distinguish
+allocations.
+
+**Cashflow.** The next statement close is the first card statement day on or after the purchase
+date; the due date is the first card due day strictly after that close. A purchase on the close
+day is treated as appearing on that close (conservative). Float days are the calendar-day
+difference from purchase to due date. Carrying value is
+$\lfloor amountCents \times annualCarryBps \times floatDays / (10000 \times 365) \rfloor$ —
+opportunity-cost utility, not card interest or guaranteed earnings.
+
+**Signup bonus.** Only spend dated on/before the deadline is eligible; every category counts. The
+bonus value is static synthetic value. If a forced bonus is already achieved, the constraint is
+satisfied and adds no new completion reward — the existing reward is not attributed to this plan.
+
+### E5. Temporal-model limitations
+
+The input lacks transaction posting timestamps, payment events, statement balances, grace-period
+state, and account opening date, so a fully faithful ledger simulator is out of scope. The model
+assumes: `current_balance_cents` remains outstanding throughout the planning horizon; every
+planned purchase immediately consumes available credit; a dated utilization ceiling counts current
+balance plus purchases dated through the cutoff; purchases after the cutoff still count toward the
+credit limit and ending utilization but not that dated ceiling; statement day changes float timing
+only; and due day does not imply an automatic payment. These assumptions are conservative for
+capacity and transparent about their limits — adding payments without payment amounts and dates
+would create false precision.
+
+### E6. Search and solver review
+
+**Single purchase.** Enumerating all cards is exact for one indivisible purchase; stable card-ID
+tie-breaking makes equal-input outputs deterministic. This result may be labeled `optimal` within
+the modeled objective and constraints.
+
+**Greedy monthly allocation.** Largest-first assignment tends to protect capacity for expensive
+purchases but can still choose an early card that blocks a later locked or bonus-critical
+assignment. Locked purchases are placed first; candidate ordering uses marginal plan utility and a
+stable tie-break; a bounded repair phase relocates one or two prior purchases when a dead end
+occurs. Even with repair, failure is not a proof: `heuristic` for a complete feasible plan,
+`infeasible` only when an analytical contradiction is proven (a locked purchase exceeding card
+capacity, or total purchases exceeding total available capacity), and `unresolved` when search
+ends without a complete plan and no proof exists.
+
+**Exact ILP.** Binary assignment variables represent indivisible purchase routing. Additive
+rewards and cashflow are constant coefficients; dated ceilings are linear. Aggregate
+utilization/risk and bonus utility use capped sets of reachable spend totals with one binary state
+selected per card, every coefficient precomputed by the same pure Python evaluator — scenarios
+exceeding the state cap fall back honestly rather than approximating. CBC optimal status supports
+an `optimal` label; CBC infeasible status supports an `infeasible` label. A timeout with an
+incumbent is not proven optimal, so the engine returns the independently verified greedy plan as
+`heuristic_fallback` with the timeout issue attached, rather than exposing an ambiguous incumbent.
+
+**Frontier.** Weighted sums find supported solutions, but discrete assignment sets can contain
+unsupported nondominated plans. The engine calls this a "sampled strategy frontier" and exposes
+active original goals, the top two or three swept goals, attempted/successful weight points, and
+`complete_frontier=false`. Dominance filtering itself is exact only over sampled plans and the
+swept-goal metrics.
+
+### E7. Intent-model review
+
+The SFT task is appropriately narrow: the output space is small, structured, and externally
+verifiable. Reverse generation from a sampled intent avoids subjective manual labeling but
+introduces two risks: **language leakage** (paraphrases of the same latent vector split across
+train/test inflate performance) and **generator style bias** (a single big model may create
+repetitive phrasing unlike real users). Mitigations: split latent intent IDs before generating
+paraphrases; hash normalized descriptions and reject duplicates across splits; vary explicit style
+controls and keep adversarial examples test-only; manually inspect stratified samples without
+changing their labels; record generator model and prompt version.
+
+The model outputs absolute ISO dates because the system prompt supplies a reference date;
+post-processing never invents dates from raw user text after model failure. The equal-weight
+fallback is operationally robust but semantically uncertain — acceptable because this project uses
+synthetic advice only. A production financial product should fail closed or require confirmation
+rather than silently optimize with guessed preferences.
+
+### E8. Evaluation review
+
+Weight MAE is useful but not sufficient: several weight vectors can lead to the same best card,
+and a small error near a decision boundary can change the result. Downstream match directly
+measures decision stability under parser error, and the headline metric uses multiple fixed
+single-purchase probes rather than one scenario/card recommendation — a single probe can make one
+dominant card insensitive to most goals and inflate match rate. Monthly agreement is reported
+separately because exact allocation matching is a stricter, higher-dimensional target:
+$agreement = \#\{purchases\ assigned\ to\ the\ same\ card\} / \#\{purchases\}$. Evaluation caches
+raw outputs, names the actual model, disables fallback, and reports failures rather than replacing
+them with default intents.
+
+### E9. Explanation review
+
+Faithfulness requires the engine to provide the comparison facts — the explanation module never
+calls scoring functions again, because configuration or state could drift between calls. For a
+single purchase, the runner-up is the second feasible ranked candidate. For a monthly assignment,
+"why not Card B" compares the chosen plan against a feasible one-purchase relocation from the
+final state, not a stateless card score. If no feasible alternative exists, that fact is more
+useful than a fabricated score gap. Constraint slack comes from the analyzer: zero is binding,
+small positive slack is near-binding.
+
+### E10. Highest remaining risks
+
+| Risk | Consequence | Control |
+|---|---|---|
+| Utility calibration feels arbitrary | Weight sliders produce unintuitive plans | Central config, Sarah snapshots, raw-metric frontier, disclosed assumptions |
+| Greedy dead end | No plan before ILP runs | Locked-first ordering, bounded repair, curated feasible default, honest status |
+| CBC unavailable on host machine | Exact path fails | Startup health check and greedy fallback |
+| Frontier latency | Slow response | Bounded grid (5 two-goal or 15 three-goal points), timeout, cache identical scenarios |
+| LLM emits subtly invalid numbers | Engine receives unsafe values | Strict finite validation and ppm conversion |
+| Generated test leakage | Inflated eval result | Split by latent intent before paraphrasing |
+| UI duplicates calculations | Explanation mismatch | HTTP-only UI and structured engine fields |
+| Live-provider dependency | Outage breaks the parser | Manual controls and clearly labeled fixture/default path |
+
 ---
-## 8. Intent parser — the Freesolo model (in `/intent/`)
-### 8a. The task
-Input: a free-text goal description. Output: strict `Intent` JSON (weights over the 6 goals summing to 1.0, plus optional constraints). Single-turn is sufficient; multi-turn ("what-if" conversation) is a stretch goal only.
-### 8b. Synthetic training data — generate in reverse (in `/intent/gen_data.py`)
-Do **not** hand-label descriptions. Instead:
-1. Sample a weight vector from a sensible distribution (Dirichlet over the 6 goals; sometimes sparse — one dominant goal; sometimes balanced).
-2. With some probability, sample a constraint (e.g. `max_utilization 30% until <future date>`; a forced bonus on a card).
-3. Prompt a strong model (offline, via API) to write **1–3 natural phrasings** a real user might say for that exact intent. Vary tone/length/specificity. Include some messy/colloquial ones.
-4. Emit `(description, intent_json)` pairs.
-Target ~800–2000 pairs (cheap to generate). Hold out ~15% as a test set. De-dupe near-identical descriptions. Include a handful of hand-written adversarial/ambiguous examples in the test set only.
-**Data format:** JSONL, one `{"messages": [...] }` per line matching Freesolo's expected SFT schema (a system prompt defining the JSON contract, the user description, the assistant JSON answer). Check Freesolo's platform docs for the exact field names and adapt.
-### 8c. Training (Freesolo platform)
-- Method: **SFT** on a small/weak base model (an SLM). The thesis is explicitly "a small trained model beats relying on a big general model here" — so a small base is the point, not a compromise.
-- Use the infinite training credits. Keep the run reproducible: log base model, hyperparameters, dataset hash.
-- Output: a small model that reliably emits valid `Intent` JSON.
-### 8d. Inference wrapper (in `/intent/parser.py`)
-`parse_intent(text: str) -> Intent`: call the trained model, parse JSON, validate with pydantic, normalize weights to sum to 1.0, fall back to default `Intent` on any failure. **Keep a prompted-big-model path behind a flag** so the live demo never breaks if the trained endpoint hiccups — but the *submission* and eval use the trained SLM.
+
+## F. Failure modes and reliability contract
+
+This section defines expected behavior when inputs, constraints, solvers, model providers,
+fixtures, or UI integration fail. It is part of the product design, not post-hoc messaging.
+
+### F1. Reliability principles
+
+1. Never crash the money path because an LLM failed.
+2. Never claim infeasibility or optimality without an appropriate proof.
+3. Never silently relax a hard constraint.
+4. Never convert an unknown value into zero and present it as measured.
+5. Never hide fallback/provider identity in the UI or evaluation.
+6. Preserve the last valid synthetic input and explain what action failed.
+7. Use stable machine-readable issue codes; prose may improve without breaking consumers.
+8. External services are optional for the CardIQ demo and mandatory only for named Freesolo measurements.
+
+### F2. Arithmetic and input failures
+
+**Float or invalid money enters a domain model.** Domain models forbid extra fields and use
+strict integer annotations for money/rates/days, rejecting floats, booleans, numeric strings,
+negatives, and invalid ranges while still accepting ISO date strings from JSON. The API returns
+HTTP 422 with field location; direct engine callers receive a validation error before
+optimization. No rounding/coercion is performed silently.
+
+**Zero-limit card.** The card remains visible for imported-state diagnostics but is excluded from
+new assignments with `zero_credit_limit`. Utilization reporting uses a defined sentinel/diagnostic
+path and never divides by zero.
+
+**Current balance already exceeds limit.** No new purchase may use that card; issue
+`card_already_over_limit`. Existing state remains visible and other cards may still form a valid
+plan. The engine does not assume an unmodeled payment.
+
+**Point value uncertain.** Every points/miles card uses a static fixture value. Output marks
+travel value as a static assumption; it does not model redemption inventory, transfer partners, or
+dynamic award prices.
+
+### F3. Constraint failures
+
+**Unknown locked card or forced bonus card.** Structured `unknown_locked_card` or
+`unknown_bonus_card`; no solve begins.
+
+**Forced card has no bonus.** `card_has_no_bonus`; no silent conversion to a soft preference.
+
+**Purchase exceeds every card's capacity.** Analytically proven `infeasible`, with affected
+purchase/card capacities and a suggestion to reduce amount, unlock, relax ceiling, or add
+capacity. No split purchase is attempted.
+
+**Utilization ceiling conflicts with required purchases.** `utilization_ceiling_exceeded` or
+`no_feasible_assignment`, with dated/full-horizon scope and required/available cents. The ceiling
+is never softened automatically — the user must explicitly change or remove it.
+
+**Forced signup bonus unreachable.** `bonus_deadline_passed` or `bonus_target_unreachable`; no
+partial plan is presented as satisfying the requirement.
+
+### F4. Search and solver failures
+
+**Greedy search dead-end.** An analytical contradiction produces `infeasible`; otherwise
+`unresolved` with `heuristic_dead_end`. The UI says the heuristic did not find a plan, not that no
+plan exists — recovery is to run exact ILP, change solver choice, or relax an explicitly named
+hard constraint.
+
+**CBC unavailable.** Health marks the exact solver degraded. An ILP request runs the verified
+greedy path and returns `heuristic_fallback` with `solver_error` when greedy succeeds; the UI
+disables or annotates exact selection.
+
+**Exact solver timeout/error.** CBC's internal timer is not trusted as the only boundary (the
+bundled Windows build can remain blocked in `cbc.wait()`), so exact solves run in an isolated
+worker behind a caller-side wall watchdog configurable from 1 to a hard maximum of 60 seconds. On
+timeout the parent terminates the complete process tree, discards any unverified incumbent, and
+runs the independent greedy allocator — a successful result is `heuristic_fallback`; failure
+preserves `unresolved` or proven `infeasible`. The maximum cannot be raised above 60 seconds
+without a reviewed code change.
+
+**CBC proves infeasible.** `infeasible`, empty assignment, diagnostic analyzer issues/suggestions.
+If the analyzer cannot isolate one minimal conflict, it states that the combined hard constraints
+conflict rather than inventing a single cause.
+
+**Solver result inconsistent with analyzer.** Every result is independently rechecked through pure
+feasibility and objective evaluation; a mismatch is treated as `solver_error`, the invalid
+assignment is never exposed, and a verified greedy fallback is attempted.
+
+### F5. Parser/provider failures
+
+**Provider unavailable, unauthorized, or timed out.** With fallback enabled: equal
+weights/no constraints, `used_fallback=true`, provider warning, manual editing controls — the
+money engine remains available. With fallback disabled: a typed upstream error, never a guessed
+intent. In evaluation: counted as invalid output/mismatch, never substituted.
+
+**Malformed/ambiguous JSON.** Same fallback/no-fallback policy as provider failure; multiple JSON
+objects are ambiguous and rejected.
+
+**Unknown goal or constraint field.** Rejected rather than silently discarded, because an unknown
+hard constraint may be safety-relevant.
+
+**Nonfinite, negative, or all-zero weights.** Rejected; non-unit positive values may be normalized
+with a warning.
+
+**Hallucinated bonus card.** The intent is rejected; the forced card is never silently dropped.
+
+**Equal-weight fallback misunderstood as safe advice.** Fallback is operationally robust but not a
+personalized financial-safety policy — the source/warning and editable weights are always shown.
+
+### F6. Synthetic data failures
+
+**Corrupt/mismatched committed fixture.** The loader validates schema, IDs, references, and the
+synthetic marker; health reports the fixture degraded and `/demo-scenario` fails with a stable
+data-load error rather than serving a partially loaded scenario.
+
+**Generated corpus interrupted/rate-limited.** Atomic cache/manifest writes permit resume; failed
+rows are not counted as examples; the final manifest remains incomplete until target acceptance
+criteria are met.
+
+**Train/test leakage.** Latent-ID split validation and global normalized-description hashes gate
+generation/eval — nothing trains or reports until regenerated.
+
+### F7. Explanation failures
+
+**Missing source field or ID mismatch.** Typed internal contract error; the API returns a generic
+500 and logs the source path rather than emitting a partially fabricated decision card.
+
+**Alternative trace absent.** Explanation may state comparison unavailable only for a known older
+schema during migration; contract tests otherwise fail rather than recomputing statelessly.
+
+**Partial progress described as reward.** Wording/template tests gate release; the template
+distinguishes qualifying spend from earned bonus.
+
+### F8. API/UI failures
+
+- **API unavailable:** the UI shows one service error and the exact local start command; forms requiring the API are disabled rather than falling back to local duplicate logic.
+- **API schema version mismatch:** the UI stops rendering the affected response and asks for matching services rather than best-effort field guessing.
+- **Domain infeasible/unresolved:** HTTP 200 with a typed result; the UI renders issues/suggestions instead of empty metrics/charts.
+- **Stale result after input edit:** results clear on submitted changed inputs or are visibly marked stale — an old plan never implies correspondence to new controls.
+- **Frontier partially succeeds:** the UI shows successful sampled plans, attempted/successful count, warnings, and incomplete disclosure; if no solve succeeds, it shows the domain failure only.
+
+### F9. CardIQ payment-lifecycle failures (implemented in `api/`)
+
+The shipped CardIQ layer adds a simulated payment lifecycle on top of the engine.
+
+**Duplicate payment request.** Every `POST /api/payments/{id}/pay` carries a client-generated
+idempotency key; `transactions.idempotency_key` is UNIQUE. A repeated key returns the original
+transaction with `duplicate: true` and logs `duplicate_blocked` — a second synthetic charge is
+never created.
+
+**Card declined / insufficient credit / locked / expired.** A locked, expired, or over-limit card
+overrides an optimistic scenario at pay time via defensive pre-checks. The transaction moves to
+`failed` through validated state transitions, the card's `recent_failures` increments (penalizing
+it in future rankings), and card-selection reruns excluding the failed card to recommend the
+backup. No retry or switch happens without user approval.
+
+**Network timeout / unknown authorization status.** The simulator scenario ends in
+`status_uncertain`; the transaction parks and the UI states that CardIQ will verify the original
+transaction before attempting another charge. There is no automatic retry — verification either
+resumes the original charge (confirmed — no second charge) or marks it failed (not found — safe to
+retry with a new idempotency key).
+
+**Illegal state transition.** Every transition is validated against `ALLOWED_TRANSITIONS` in
+`api/state_machine.py`; an illegal transition raises before any state is written.
+
+### F10. Privacy/security posture
+
+- Persona, account, purchase, bonus-progress, and demo text fixtures are synthetic. Product names and ordinary reward terms are public reference facts sourced from official issuer pages and timestamped.
+- No banking login, card number, government ID, address, or real transaction feed is accepted.
+- Secrets live in environment variables and `.env` is gitignored.
+- Provider caches omit headers/secrets.
+- Default logs omit raw text and full financial objects.
+- The API accepts no arbitrary provider URL or file path.
+- External calls are only intent parsing/offline generation — card and purchase math never leaves the local process.
+
+This is a prototype, not production financial advice or a payment processor. Threat modeling for
+real PII, authentication, authorization, encryption-at-rest, audit retention, and regulatory
+controls would be mandatory before production use.
+
+### F11. Degraded-mode recovery matrix
+
+| Failure | Recovery |
+|---|---|
+| Freesolo unavailable | Show warning; use manual preset/sliders |
+| Prompted fallback unavailable | Use manual preset/sliders |
+| CBC unavailable/timeout | Show heuristic fallback status |
+| Frontier too slow/partial | Show available sampled plans or skip to what-if |
+| Hard constraints infeasible | Show the structured failure block, then relax explicitly |
+| UI loses the API | Restart API using the displayed command; engine tests remain independent |
+
+### F12. Verification checklist
+
+- Zero-limit, over-limit, no-capacity, forced-bonus, and conflicting-constraint tests pass.
+- Greedy dead-end versus proven infeasibility wording is correct.
+- CBC timeout/unavailable path returns verified fallback or honest unresolved result.
+- Parser fallback source is visible; eval fallback count is zero.
+- No generated corpus leakage.
+- Explanation source-path tests pass.
+- API error bodies/log captures contain no secret sentinel.
+- The Sarah demo works with network disabled, through manual intent controls.
+
 ---
-## 9. Eval harness (in `/eval/`) — this IS the Freesolo deliverable, not an afterthought
-Produce a small report comparing, on the held-out set:
-- **Trained SLM** (the submission)
-- **Base SLM** (same model, no fine-tuning, prompted)
-- **Big general model** (prompted) — as a ceiling reference
-Metrics:
-1. **Valid-JSON rate** — fraction of outputs that parse and validate.
-2. **Weight error** — e.g. mean absolute error / KL between predicted and gold weight vectors.
-3. **⭐ Downstream match rate (headline metric)** — feed predicted weights into the solver on a fixed scenario; check whether the solver's top recommendation equals the recommendation from the *gold* weights. This is the compelling number: it measures what actually matters (does the parse lead to the right decision?) and makes the **solver a verifier of the model**. Lead the Freesolo pitch with this.
-4. **Constraint extraction accuracy** — did it catch the "utilization ceiling until date" / forced-bonus constraints?
-The story to tell: *"Our small fine-tuned model matches (or approaches) the big model on downstream decision accuracy while being small and cheap — and the deterministic solver both does the money math and verifies the model's parses."* The ablation table is itself what the track wants to see.
----
-## 10. Explanation layer (in `/explain/`) — templated, NOT an LLM
-Explainability is one of the project's killer features — treat it as a first-class visual, not an afterthought paragraph. `explain(solution, factor_breakdowns, intent)` returns **structured blocks** (not just a string) so the UI can render a **decision-score card** per recommendation:
-```
-  ┌──────────────────────────────────────────┐
-  │  Visa Infinite (synthetic)      Score 91  │
-  │  ✅ +$42 projected rewards                 │
-  │  ✅ Utilization stays at 18% (under 20%)   │
-  │  ✅ Reaches Amex signup bonus              │
-  │  ✅ 42 days of interest-free float         │
-  │  ⚠️  Risk: Low                             │
-  │  Why not Amex Gold? −$11 rewards, util 34% │
-  └──────────────────────────────────────────┘
-```
-Every line is built from the solver's actual numbers:
-- Which factor(s) dominated the winning card's score (from `factor_breakdown`).
-- Why the runner-up lost (the specific factor gap — always show this; it's the most convincing part).
-- Which hard constraints were binding (limit, utilization ceiling, forced bonus).
-- Bonus progress delta and whether a deadline is at risk.
-Templated explanations are **faithful by construction** and cannot hallucinate — exactly right for a fintech demo. Do not route money reasoning through a language model.
-> Note: do **not** attach a "confidence" score to these factors. The engine is deterministic, so `reward = amount × rate` is exact — reporting confidence on an exact calculation would undercut the "calculations, not predictions" thesis. The only genuine uncertainty is point valuation, which is a documented static assumption, not a per-decision confidence.
----
-## 11. API + UI
-**API (`/api/main.py`, FastAPI):**
-- `GET /demo-scenario` -> sourced product definitions combined with Sarah's synthetic accounts, purchases, reference date, and manual intent presets
-- `POST /parse-intent` -> `{text, reference_date, card_context}` -> parse result with `Intent`, source, fallback state, and warnings
-- `POST /recommend` → `{cards, purchase, intent}` → single-purchase rec + explanation
-- `POST /allocate` → `{cards, purchases, intent}` → monthly allocation + metrics + explanation
-- `POST /frontier` -> `{cards, purchases, intent}` -> sampled strategy frontier (3-5 labeled sampled non-dominated plans, metadata, metrics, explanations)
-- `POST /what-if` → `{scenario, override}` → diff
-**UI (Streamlit is fine):**
-1. Load a pre-seeded portfolio of sourced Canadian products with synthetic limits, balances, and cycle dates; allow light account editing.
-2. Free-text goal box -> shows the parsed `Intent` (weights as sliders the user can tweak, making the parse tangible and providing manual fallback). Surface supported **hard constraints** as separate visible chips ("Never exceed 20% per-card utilization", "Must hit Aurora bonus") rather than preference sliders.
-3. "Recommend for this purchase" and "Plan my month" views.
-4. Results rendered as **decision-score cards** (see §10): per-card score, the ✅/⚠️ factor lines, and the "why not the runner-up" line. Plus per-card utilization bars and bonus-progress bars.
-5. **Strategies view:** a small scatter/table of sampled non-dominated plans, each expandable into its full allocation and decision cards, with grid-size/incompleteness disclosure.
-6. One what-if control (e.g. a dropdown to move rent to another card) showing the live diff.
-Highlight rent as a first-class, `is_recurring` purchase to anchor the Chexy narrative.
-### The demo script (rehearse this ONE story — it matters more than any feature)
-A single coherent narrative beats a feature tour. Use one persona and let the constraints visibly reshape the plan:
-> **Sarah** has a synthetic account portfolio using RBC Avion Visa Infinite, American Express Gold Rewards, Scotia Momentum Visa Infinite, and Rogers Red World Elite. She types: *"I'm applying for a mortgage in 3 months so I need to keep my credit utilization low, but I'd still like to hit my synthetic Amex Gold spend bonus, and I pay $2,200 rent."*
->
-> 1. The parser turns that into weights (credit-health high, signup moderate) **plus a hard constraint** (utilization ceiling until the mortgage date). Show the parsed intent + constraint chips.
-> 2. Run **Plan my month** → show the allocation, decision cards, utilization staying under the ceiling, and Amex bonus progress.
-> 3. Show the **sampled strategy frontier** -> "here are the other sampled viable strategies and what each trades away."
-> 4. **Flip the goal:** *"Mortgage's done — now maximize travel rewards."* Re-run. The entire allocation visibly changes. Rent moves to a different card.
-> 5. One **what-if:** "what if rent goes on the Visa instead?" → live diff.
-That arc shows intent-parsing, constraint-aware optimization, multi-objective tradeoffs, and reactivity in ~2 minutes — without touching real money or real data.
----
-## 12. Product reference and synthetic scenario data (in `/data/`)
-- Eight agreed Canadian products with names, ordinary fees/earn rates, official issuer URLs, `verified_on` date, point-value basis, assumptions, and unmodeled terms.
-- Sarah's synthetic portfolio account state: limits, balances, statement/due days, service qualification, and one synthetic one-stage bonus.
-- Twenty synthetic August 2026 purchases including `$2,200` rent, groceries, dining, travel, recurring bills, and a large one-off.
-- Five synthetic downstream probes designed so different goals can change the winning product.
-- Do not claim that rent earns an issuer recurring-payment multiplier unless transaction classification is explicitly verified; the demo uses base earn for rent.
----
-## 13. Build order (milestones with acceptance criteria)
-Do these in order. Each milestone should leave the repo in a working state.
-| # | Milestone | Acceptance criteria | Rough effort |
-|---|-----------|---------------------|--------------|
-| M1 | Data models + synthetic catalog | pydantic models validate; a demo portfolio + month of purchases load | ~1.5 hr |
-| M2 | Scoring functions + tests | each factor pure, integer-cents, unit-tested incl. edge cases | ~2 hr |
-| M3 | Single-purchase recommender | returns argmax + factor breakdown for winner & runner-up | ~2 hr |
-| M4 | **Monthly allocation** | Stage 1 greedy+repair+local-search succeeds on the curated demo and distinguishes unresolved from proven infeasible; Stage 2 ILP matches brute force on tiny cases | **~half-1 day** |
-| M5 | Failure modes + FAILURE_MODES.md | infeasible/over-limit/zero-limit/invalid-intent all handled, tested | ~2 hr |
-| M6 | Explanation layer (decision-score cards) | structured blocks from real solver numbers; includes "why not the runner-up"; names binding constraints | ~2.5 hr |
-| M7 | **Sampled strategy frontier** (stretch) | bounded weight sweep -> 3-5 sampled non-dominated labeled plans with incompleteness metadata | ~2-3 hr |
-| M8 | Synthetic training-data generator | ~800–2000 `(description, intent)` pairs, JSONL, held-out split | ~3 hr |
-| M9 | SFT on Freesolo | trained SLM emits valid Intent JSON | run hands-off; ~2 hr prep |
-| M10 | Intent inference wrapper + fallback | validates output, normalizes weights, big-model fallback flag | ~1.5 hr |
-| M11 | **Eval harness + report** | trained vs base vs big; downstream-match metric computed | ~3 hr |
-| M12 | API + UI | end-to-end loop in the browser: decision cards, sampled strategies view, one what-if | ~half day |
-| M13 | Demo polish + Devpost writeup | rehearse the Sarah script; pitch, architecture summary, rule-6 considerations, repo link | ~2.5 hr |
-**Parallelization (2+ people):** one person owns M1–M7 + M12 (engine, Pareto, demo), another owns M8–M11 (data + model + eval). They meet at the `Intent` contract (§4) — agree on that JSON shape in the first hour and both sides move independently. **Whether to pursue Freesolo at all is mostly a team-size call:** with 2+ people the model track parallelizes cleanly and both prizes are in reach; solo, protect the Chexy build first and treat Freesolo as the stretch.
-**Solo / tight-on-time cut order:** M1→M2→M3→M4(Stage 1 only)→M6→M12 gives a complete Chexy demo. Then add M4 Stage 2 (ILP) and M7 (Pareto) if time allows — these are the depth-and-signature upgrades. Then M8→M10→M11 for the Freesolo submission (M9 training runs in the background). M5 talking points and M13 writeup last. Priority order when cutting: keep the monthly allocation and explanation cards above all; drop what-if first, then Pareto, then Freesolo — never the allocation.
----
-## 14. Explicit non-goals / scope guards (do NOT build these)
-- ❌ **No ML for the optimization engine.** It is a deterministic solver. (This is the single most important instruction.)
-- ❌ **No reinforcement learning.** SFT only.
-- ❌ **No second trained model.** Explanations are templated.
-- ❌ No dynamic travel-award-availability modeling. Static cents-per-point table only.
-- ❌ No real money, credentials, card numbers, PII, account state, or transactions. Public issuer product terms are the only non-synthetic reference data.
-- ❌ No splitting a single purchase across multiple cards.
-- ❌ Do not implement all ~10 originally-brainstormed features. Core loop only: input cards -> NL goal -> parsed weights + constraints -> allocation -> decision-score cards -> sampled strategy frontier -> one what-if.
-- ❌ Do not compute or claim a complete high-dimensional Pareto frontier. Sweep only the top 2-3 positively weighted objectives at coarse, bounded resolution.
-- ❌ Do not attach "confidence" scores to deterministic factor calculations (see §10) — it contradicts the "calculations, not predictions" thesis.
-- ❌ Do not let the UI consume time budgeted for the solver or the eval.
----
-## 15. Definition of done
-- A judge can, in the browser: load a portfolio, type a goal in plain English, see it parsed into weights + constraint chips, get a monthly card-by-card plan with projected rewards/utilization/bonus progress, read faithful decision-score cards, view a disclosed sampled strategy frontier, and run one what-if following the Sarah script end-to-end.
-- The money math is integer-cents and the engine is deterministic; failure modes are handled, not crashed.
-- The Freesolo submission includes a trained SLM and a frozen eval report comparing downstream match against the matching base model and a prompted large model. Performance claims reflect measured results, even if the trained model does not win.
-- Devpost writeup covers: target user, payment problem, Chexy relationship, user benefit, tech/architecture summary, and the rule-6 considerations (privacy, security, reliability, financial correctness, error handling, failure modes). Repo linked.
----
-*End of spec. Implement top-to-bottom. Correctness and a working end-to-end loop beat breadth.*
+
+## G. Original product framing
+
+The one-sentence pitch this project shipped against: *a personalized payment-strategy engine that
+decides not just which card to use but why, optimizing every payment — especially large recurring
+ones like rent — around each user's financial goals.*
+
+**Target user:** a financially engaged consumer with 2–5 credit cards who wants to hit a signup
+bonus, protect their credit score before a big application (e.g. a mortgage), or maximize
+rewards/cash flow, without manually reasoning about statement dates, utilization, and bonus
+deadlines. People pick cards by a single crude heuristic ("highest cashback") and ignore
+utilization impact, statement/due-date float, and time-bound bonus deadlines. Rent is the largest
+predictable expense and the biggest lever, but also the easiest to mismanage.
+
+**Differentiation:** multi-card monthly allocation under real constraints (limits, utilization
+targets, bonus thresholds, statement timing); cash-flow/float optimization via statement-close and
+due-date timing; temporal constraints (bonus deadlines, "keep utilization low until date X") as
+constraints over time rather than a static score; and a sampled strategy frontier that surfaces
+nondominated plans instead of collapsing everything into one weighted answer, with the swept grid
+explicitly disclosed.
+
+**Why the engine is deterministic, not ML:** "reward earned on purchase X with card Y" is a
+calculation, not a prediction. There is no need for training data, and a learned approximation of
+a solver is strictly less correct. Getting ML training labels would require the correct answer per
+scenario, which requires a solver anyway — circular. So: solver for math, LLM for language only.
+Feeding the LLM's predicted weights into the solver and checking whether its top recommendation
+matches the recommendation from the *gold* weights — "downstream match" — lets the solver double
+as a verifier of the model; it is the headline eval metric.
+
+**Explicit non-goals (deliberately not built):**
+
+- No ML for the optimization engine — it is a deterministic solver. The single most important constraint in the project.
+- No reinforcement learning — supervised fine-tuning only.
+- No second trained model — explanations are templated.
+- No dynamic travel-award-availability modeling — a static cents-per-point table only.
+- No real money, credentials, card numbers, PII, account state, or transactions. Public issuer product terms are the only non-synthetic reference data.
+- No splitting a single purchase across multiple cards.
+- No complete high-dimensional Pareto frontier — only the top 2–3 positively weighted objectives are swept, at coarse, bounded resolution.
+- No confidence scores on deterministic factor calculations — it would contradict the "calculations, not predictions" thesis.
+- No UI-side recomputation of anything the engine already computed.
+
+**Definition of done:** a user can, in the browser, load a portfolio, type a goal in plain English,
+see it parsed into weights and constraint chips, get a monthly card-by-card plan with projected
+rewards/utilization/bonus progress, read faithful decision-score cards, view a disclosed sampled
+strategy frontier, and run a what-if — all following one coherent narrative end to end. The money
+math is integer-cents and the engine is deterministic; failure modes are handled, not crashed. The
+Freesolo submission includes a trained SLM and a frozen eval report comparing downstream match
+against the matching base model and a prompted large model, with performance claims reflecting
+measured results even where the trained model does not win.
